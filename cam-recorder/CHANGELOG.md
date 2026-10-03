@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.4
+
+- Menü neu geordnet: oben Ansicht (Rotieren / Alle gleich groß), Übersicht
+  und Vollbild; Anheften als Chips; Kameras mit Zustand und Empfang in einer
+  Liste, „Alle an/aus“ im Kopf.
+- Menü springt beim Scrollen nicht mehr zurück (wurde jede Sekunde neu
+  gezeichnet).
+
 ## 0.3.3
 
 - Oberfläche unter `ui/` statt `static/`: der Service Worker von Home

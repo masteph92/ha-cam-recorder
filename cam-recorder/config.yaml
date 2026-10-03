@@ -1,5 +1,5 @@
 name: Cam Recorder
-version: "0.3.3"
+version: "0.3.4"
 slug: cam_recorder
 description: Ringpuffer-Aufnahme für RTSP-Kameras, Ereignis-Clips nach Backblaze B2
 url: https://github.com/masteph92/ha-cam-recorder

@@ -15,6 +15,7 @@ let pin = null;            // { cam, until } – nur auf diesem Bildschirm
 let menuOpen = false;
 let rotateOn = true;
 let built = '';            // Signatur des aufgebauten Gerüsts
+let shownMenu = '';        // zuletzt gezeichnetes Menü – nur bei Änderung neu, sonst springt der Scroll
 
 // Bildschirmeigene Einstellung; ohne Browser-Speicher gilt der Standard
 const local = {
@@ -84,22 +85,23 @@ function buildSkeleton(d) {
   const sig = view() + ':' + d.cams.map((c) => c.id).join(',');
   if (sig === built) return;
   built = sig;
+  shownMenu = '';
   for (const key of [...videos.keys()]) dropVideo(key);
   if (d.grid) {
     const n = d.cams.length;
     const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
     root.innerHTML = `<div class="grid" style="grid-template-columns:repeat(${cols},minmax(0,1fr));grid-template-rows:repeat(${Math.ceil(n / cols)},minmax(0,1fr))">${d.cams.map((c) =>
       `<button type="button" class="tile gtile" data-open="${esc(c.id)}" aria-label="${esc(c.label)} öffnen"><div class="slot"></div><span class="tov"></span></button>`).join('')}</div>
-      <div id="ov"></div>`;
+      <div id="ov"></div><div id="menu"></div>`;
   } else if (d.tablet) {
     root.innerHTML = d.cams.map((c) => `<div class="layer" data-layer="${esc(c.id)}"><div class="slot"></div></div>`).join('') +
-      '<div id="ov"></div>';
+      '<div id="ov"></div><div id="menu"></div>';
   } else {
     root.innerHTML = `<div class="monitor"><div class="big" id="big">${d.cams.map((c) =>
       `<div class="layer" data-layer="${esc(c.id)}"><div class="slot"></div></div>`).join('')}<div id="bigov"></div></div>
       <div class="strip" id="strip">${d.cams.map((c) =>
       `<button type="button" class="tile" data-tile="${esc(c.id)}" aria-label="${esc(c.label)} hier anheften"><div class="slot"></div><span class="tov"></span></button>`).join('')}</div></div>
-      <div id="ov"></div>`;
+      <div id="ov"></div><div id="menu"></div>`;
   }
 }
 
@@ -251,33 +253,52 @@ function renderChrome(d) {
     `<button type="button" class="menu-btn" data-act="menu" aria-label="Menü" aria-expanded="${menuOpen}">` +
     '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>';
   if (!connected) html += '<div class="conn">Verbindung wird hergestellt …</div>';
-  if (menuOpen) html += menuHtml(d);
   root.querySelector('#ov').innerHTML = html;
+  const menu = menuOpen ? menuHtml(d) : '';
+  if (menu !== shownMenu) {
+    const host = root.querySelector('#menu');
+    const top = host.querySelector('.panel')?.scrollTop || 0;
+    host.innerHTML = menu;
+    const panel = host.querySelector('.panel');
+    if (panel) panel.scrollTop = top;
+    shownMenu = menu;
+  }
 }
 
 function menuHtml(d) {
-  const auto = rotateOn && !pin && !gridOn;
-  const showRows = [`<button type="button" class="opt" data-act="rotate" aria-pressed="${auto}">Automatisch rotieren<span>${auto ? '●' : ''}</span></button>`,
-    `<button type="button" class="opt" data-act="grid" aria-pressed="${gridOn}">Alle gleich groß<span>${gridOn ? '●' : ''}</span></button>`]
-    .concat(d.cams.map((c) => `<button type="button" class="opt" data-pin="${esc(c.id)}" aria-pressed="${pin && pin.cam === c.id}">${esc(c.label)} anheften<span>${pin && pin.cam === c.id ? '●' : ''}</span></button>`));
+  const auto = !gridOn && !pin;
+  const icon = (p) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">${p}</svg>`;
+  const pins = d.grid ? '' : `<div class="sec"><span class="cap2">Anheften · nur hier</span><div class="chipsel">${d.cams.map((c) => {
+    const on = pin && pin.cam === c.id;
+    return `<button type="button" ${on ? 'data-act="unpin"' : `data-pin="${esc(c.id)}"`} aria-pressed="${!!on}">${esc(c.label)}${on ? ' ×' : ''}</button>`;
+  }).join('')}</div></div>`;
   const rows = d.cams.map((c) => {
     const s = sigInfo(c);
-    const info = c.off ? (c.off_reason === 'privacy' ? 'Privatsphäre – Kamera aus' : 'pausiert – keine Aufnahme')
-      : (c.door === 'open' ? 'Tor offen' : c.door === 'closed' ? 'Tor zu' : 'Aufnahme');
-    return `<div class="camrow"><span><div>${esc(c.label)}</div><div class="info ${c.door === 'open' && !c.off ? 'door' : ''}">${info}</div></span>` +
-      `<span class="rsig sig ${s ? s.cls : ''}" style="position:static;padding:0;background:none">${c.wired ? 'Kabel' : (s ? esc(s.text) : '')}</span>` +
+    const door = c.door === 'open' && !c.off;
+    const info = c.off ? (c.off_reason === 'privacy' ? 'Privat · aus' : 'Pausiert') : door ? 'Tor offen' : d.motions.includes(c.id) ? 'Bewegung' : 'Aufnahme';
+    const sig = c.wired ? 'Kabel' : (s ? esc(s.text) : '');
+    return `<div class="camrow${c.off ? ' is-off' : ''}"><span class="cname"><span>${esc(c.label)}</span>` +
+      `<span class="info${door || d.motions.includes(c.id) ? ' alert' : ''}">${info}${sig ? ` · <span class="sig ${s && !c.wired ? s.cls : 'good'}">${sig}</span>` : ''}</span></span>` +
       `<button type="button" class="switch" role="switch" aria-checked="${!c.off}" data-off="${esc(c.id)}" aria-label="${esc(c.label)} ${c.off ? 'einschalten' : 'ausschalten'}"><span></span></button></div>`;
   });
   const offCount = d.cams.filter((c) => c.off).length;
   return `<button type="button" class="backdrop" data-act="close" aria-label="Menü schließen"></button>
     <aside class="panel" aria-label="Menü">
       <div class="head"><h2>${esc(S.title)}</h2><button type="button" class="x" data-act="close" aria-label="Schließen">×</button></div>
-      <div class="sec"><span class="cap2">Anzeige · nur dieser Bildschirm</span>${showRows.join('')}</div>
-      <div class="sec"><span class="cap2">Kameras · für alle</span>
-        <div class="row2"><button type="button" class="opt" data-act="allon">Alle an</button><button type="button" class="opt" data-act="alloff">Alle aus</button></div>
-        ${rows.join('')}
-        <span class="hint">${offCount ? offCount + ' von ' + d.cams.length + ' aus' : 'Alle nehmen auf und melden Bewegung'}</span></div>
-      <div class="foot"><a class="opt" href="#overview">${S.history ? 'Übersicht &amp; Verlauf' : 'Übersicht'}<span aria-hidden="true">›</span></a><button type="button" class="opt" data-act="fullscreen">Vollbild</button></div>
+      <div class="seg" role="group" aria-label="Ansicht">
+        <button type="button" data-act="rotate" aria-pressed="${auto}">${icon('<path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4"/>')}Rotieren</button>
+        <button type="button" data-act="${gridOn ? 'rotate' : 'grid'}" aria-pressed="${gridOn}">${icon('<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>')}Alle gleich groß</button>
+      </div>
+      <div class="quick">
+        <a class="qbtn" href="#overview">${icon('<path d="M4 6h16M4 12h16M4 18h10"/>')}${S.history ? 'Übersicht &amp; Verlauf' : 'Übersicht'}</a>
+        <button type="button" class="qbtn" data-act="fullscreen">${icon('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>')}Vollbild</button>
+      </div>
+      ${pins}
+      <div class="sec">
+        <div class="sechead"><span class="cap2">Kameras</span><span><button type="button" class="textbtn" data-act="allon">Alle an</button><button type="button" class="textbtn" data-act="alloff">Alle aus</button></span></div>
+        <div class="camlist">${rows.join('')}</div>
+        <span class="hint">${offCount ? offCount + ' von ' + d.cams.length + ' aus' : 'Alle nehmen auf und melden Bewegung'}</span>
+      </div>
     </aside>`;
 }
 
