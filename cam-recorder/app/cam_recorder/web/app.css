@@ -106,3 +106,63 @@ button { font: inherit; color: inherit; }
   .cap { left: 16px; bottom: 16px; }
   .sig { right: 16px; bottom: 20px; }
 }
+
+/* ---------------------------------------------------------------- Detailansicht */
+.d-page { position: absolute; inset: 0; overflow-y: auto; padding: 20px clamp(12px, 3vw, 32px) 40px; display: flex; flex-direction: column; gap: 22px; max-width: 1400px; margin: 0 auto; }
+.d-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.d-head h1 { margin: 0 8px 0 0; font-family: var(--cond); font-weight: 600; font-size: clamp(22px, 2.6vw, 30px); }
+.d-back { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 10px; background: var(--control); color: var(--text); text-decoration: none; }
+.d-chip { padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; color: var(--muted); }
+.d-mono { font-family: var(--mono); }
+.d-muted { color: var(--muted); font-size: 13px; }
+.d-live { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+.d-lt { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: var(--video); border: 1px solid var(--line); }
+.d-lt.alert { border-color: #ff453ab3; }
+.d-lt cam-video { position: absolute; inset: 0; } .d-lt video { width: 100%; height: 100%; object-fit: cover; }
+.d-ltl { position: absolute; left: 10px; bottom: 8px; z-index: 1; font-family: var(--cond); font-weight: 600; font-size: 16px; text-shadow: 0 1px 6px #000; }
+.d-off { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--off-fg); font-family: var(--mono); font-size: 12px; }
+.d-card { padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+.d-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.d-row h2, .d-card h2 { margin: 0; font-family: var(--cond); font-weight: 600; font-size: 19px; }
+.d-days { display: flex; gap: 6px; }
+.d-pill { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--control); color: var(--text); text-decoration: none; font-size: 14px; }
+.d-pill[aria-current="true"] { border-color: var(--sel-border); background: var(--sel); }
+.d-scroll { overflow-x: auto; }
+.d-tracks { min-width: 620px; display: flex; flex-direction: column; gap: 10px; }
+.d-track { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; align-items: center; }
+.d-tl { font-weight: 500; font-size: 14px; }
+.d-axis > div { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.d-bar { position: relative; height: 34px; border-radius: 8px; background: var(--control); overflow: hidden; }
+.d-cov { position: absolute; top: 9px; bottom: 9px; background: #3a3a3c; border-radius: 3px; }
+.d-mark { position: absolute; top: 0; bottom: 0; width: 14px; margin-left: -7px; display: flex; justify-content: center; }
+.d-mark > span { width: 3px; height: 100%; background: #aeaeb2; border-radius: 2px; }
+.d-mark:hover > span, .d-mark:focus-visible > span { width: 5px; background: var(--text); }
+.d-now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); opacity: 0.7; }
+.d-legend { display: flex; flex-wrap: wrap; gap: 16px; padding-left: 122px; font-size: 12px; color: var(--muted); }
+.d-legend i { display: inline-block; vertical-align: middle; margin-right: 6px; }
+.d-cov-i { width: 16px; height: 8px; background: #3a3a3c; border-radius: 2px; }
+.d-mark-i { width: 3px; height: 12px; background: #aeaeb2; }
+.d-now-i { width: 2px; height: 12px; background: var(--text); }
+.d-list { display: flex; flex-direction: column; gap: 8px; }
+.d-ev { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); }
+.d-ev img, .d-noimg { width: 128px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; background: var(--video); }
+.d-noimg { display: flex; align-items: center; justify-content: center; color: var(--off-fg); font-size: 11px; }
+.d-evt { flex: 1 1 200px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.d-btn, .d-ctrl button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--control); color: var(--text); text-decoration: none; cursor: pointer; font-size: 14px; }
+.d-primary { background: var(--text) !important; color: #000 !important; border-color: var(--text) !important; font-weight: 600; }
+.d-ctrl button[aria-pressed="true"] { border-color: var(--sel-border); background: var(--sel); }
+.d-playwrap { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.d-video { position: relative; flex: 999 1 560px; min-width: 0; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: var(--video); }
+.d-video video { width: 100%; height: 100%; object-fit: contain; }
+.d-clock { position: absolute; left: 12px; top: 10px; padding: 3px 10px; border-radius: 8px; background: var(--scrim); font-size: 14px; }
+.d-speed { position: absolute; right: 12px; top: 10px; font-size: 13px; color: var(--muted); }
+.d-side { flex: 1 1 260px; display: flex; flex-direction: column; gap: 12px; }
+.d-side dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: 13px; }
+.d-side dt { color: var(--muted); } .d-side dd { margin: 0; }
+.d-side img { width: 100%; border-radius: 8px; }
+.d-scrub { position: relative; height: 44px; display: flex; align-items: center; }
+.d-span { position: absolute; top: 12px; bottom: 12px; border-radius: 4px; background: #ffffff1f; border: 1px solid #ffffff40; pointer-events: none; }
+.d-scrub input { position: relative; width: 100%; accent-color: var(--text); }
+.d-axis2 { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.d-ctrl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.d-grow { flex: 1; }

@@ -18,6 +18,7 @@ from .events import Closed, Event, EventTracker, Opened
 from .recorder import Recorder
 from .segments import Segment, window
 from .state import StateDB, utc_day
+from .archive import Archive
 from .ui import UiState
 from .uploader import Uploader, remote_dst
 
@@ -234,6 +235,15 @@ class App:
             if f.stat().st_mtime < limit and str(f) not in pending:
                 f.unlink(missing_ok=True)
 
+    def storage_stats(self) -> dict:
+        return {
+            "store": self.store.kind,
+            "used_bytes": self.db.used_bytes(self.store.kind),
+            "max_bytes": self.cfg.primary_max_bytes if self.store.kind == "primary" else None,
+            "queue": self.db.pending_count(),
+            "upload": self.cfg.upload_enabled,
+        }
+
     # ------------------------------------------------------------ health
     def health(self) -> dict[str, dict]:
         t = self.clock()
@@ -294,7 +304,9 @@ class App:
             snapshot=lambda: self.ui.snapshot(self.clock()),
             subscribe=self.ui.subscribe, unsubscribe=self.ui.unsubscribe,
             set_off=self.set_off, set_all_off=self.set_all_off,
-            stream_names=go2rtc.stream_names(self.cfg), kiosk_key=self.cfg.kiosk_key)
+            stream_names=go2rtc.stream_names(self.cfg), kiosk_key=self.cfg.kiosk_key,
+            archive=Archive(self.db, self.cfg.pre_seconds, self.data / "snapshots") if self.cfg.recording else None,
+            storage_stats=self.storage_stats)
 
         tasks = [
             web.serve(ui_app),

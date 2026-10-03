@@ -3,6 +3,7 @@ FROM ${BUILD_FROM}
 
 ARG BUILD_ARCH
 ARG GO2RTC_VERSION
+ARG HLSJS_VERSION=1.5.20
 
 RUN apk add --no-cache python3 py3-aiohttp ffmpeg rclone curl
 
@@ -17,6 +18,9 @@ RUN case "${BUILD_ARCH}" in \
  && go2rtc -version
 
 COPY app /app
+# hls.js für die Wiedergabe in Chrome/Fire-Tablet, lokal statt CDN
+RUN curl -fsSL -o /app/cam_recorder/web/hls.min.js \
+      "https://cdn.jsdelivr.net/npm/hls.js@${HLSJS_VERSION}/dist/hls.min.js"
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 

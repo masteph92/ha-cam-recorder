@@ -67,6 +67,7 @@ class UiState:
             "now": now,
             "rotate_seconds": self.cfg.ui_rotate_seconds,
             "pin_minutes": self.cfg.ui_pin_minutes,
+            "history": self.cfg.recording,
             "cams": [c.as_dict() for c in self.cams.values()],
         }
 

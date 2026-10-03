@@ -46,7 +46,8 @@ def key_ok(request: web.Request, key: str) -> bool:
 
 def make_app(*, snapshot: Callable[[], dict], subscribe, unsubscribe,
              set_off: Callable[[str, bool], Awaitable[bool]], set_all_off: Callable[[bool], Awaitable[None]],
-             stream_names: set[str], kiosk_key: str) -> web.Application:
+             stream_names: set[str], kiosk_key: str,
+             archive=None, storage_stats: Callable[[], dict] = lambda: {}) -> web.Application:
 
     @web.middleware
     async def auth(request: web.Request, handler):
@@ -133,7 +134,93 @@ def make_app(*, snapshot: Callable[[], dict], subscribe, unsubscribe,
         await client.close()
         return client
 
+    # ---------------------------------------------------------- details view
+    def _range(request: web.Request) -> tuple[float, float]:
+        try:
+            start, end = float(request.query["start"]), float(request.query["end"])
+        except (KeyError, ValueError):
+            raise web.HTTPBadRequest(text="start/end (epoch seconds) required")
+        if end <= start or end - start > 3 * 86400:
+            raise web.HTTPBadRequest(text="range must be positive and at most 3 days")
+        return start, end
+
+    def _need_archive():
+        if archive is None:
+            raise web.HTTPNotFound(text="recording disabled")
+
+    async def history(request: web.Request) -> web.Response:
+        _need_archive()
+        start, end = _range(request)
+        cams = [c["id"] for c in snapshot()["cams"]]
+        return web.json_response({
+            "events": archive.events(start, end),
+            "coverage": {c: [[sp.start, sp.end] for sp in archive.coverage(c, start, end)] for c in cams},
+            "storage": storage_stats(),
+        })
+
+    async def vod(request: web.Request) -> web.Response:
+        _need_archive()
+        cam = request.match_info["cam"]
+        start, end = _range(request)
+        segs = archive.segments(cam, start, end)
+        from .archive import hls_playlist
+        body = hls_playlist(segs, lambda sg: f"../seg/{cam}/{Path(sg.path).name}")
+        return web.Response(text=body, content_type="application/vnd.apple.mpegurl",
+                            headers={"Cache-Control": "no-cache"})
+
+    async def seg(request: web.Request) -> web.StreamResponse:
+        _need_archive()
+        p = archive.segment_path(request.match_info["cam"], request.match_info["name"])
+        if p is None:
+            raise web.HTTPNotFound()
+        return web.FileResponse(p, headers={"Content-Type": "video/mp2t", "Cache-Control": "max-age=86400"})
+
+    async def snap(request: web.Request) -> web.StreamResponse:
+        _need_archive()
+        p = archive.snapshot_path(request.match_info["id"])
+        if p is None:
+            raise web.HTTPNotFound()
+        return web.FileResponse(p, headers={"Cache-Control": "max-age=86400"})
+
+    async def clip(request: web.Request) -> web.StreamResponse:
+        """Event as one .mp4: concat of its segments, copied, not transcoded."""
+        _need_archive()
+        ev = archive.event(request.match_info["id"])
+        if ev is None:
+            raise web.HTTPNotFound()
+        t0, t1 = archive.event_window(ev, time.time())
+        segs = archive.segments(ev["cam"], t0, t1)
+        if not segs:
+            raise web.HTTPNotFound(text="no segments left for this event")
+        listing = "".join(f"file '{sg.path}'\n" for sg in segs)
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0",
+            "-protocol_whitelist", "file,pipe", "-i", "pipe:0", "-c", "copy",
+            "-movflags", "frag_keyframe+empty_moov", "-f", "mp4", "pipe:1",
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        proc.stdin.write(listing.encode())
+        await proc.stdin.drain()
+        proc.stdin.close()
+        stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(ev["start"]))
+        resp = web.StreamResponse(headers={
+            "Content-Type": "video/mp4",
+            "Content-Disposition": f'attachment; filename="{ev["cam"]}-{stamp}.mp4"'})
+        await resp.prepare(request)
+        try:
+            while chunk := await proc.stdout.read(65536):
+                await resp.write(chunk)
+        finally:
+            if proc.returncode is None:
+                proc.kill()
+            await proc.wait()
+        return resp
+
     app = web.Application(middlewares=[auth])
+    app.router.add_get("/api/history", history)
+    app.router.add_get("/api/vod/{cam}.m3u8", vod)
+    app.router.add_get("/api/seg/{cam}/{name}", seg)
+    app.router.add_get("/api/snapshot/{id}.jpg", snap)
+    app.router.add_get("/api/clip/{id}.mp4", clip)
     app.router.add_get("/", index)
     app.router.add_get("/api/state", state)
     app.router.add_get("/api/live", live)

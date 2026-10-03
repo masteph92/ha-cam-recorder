@@ -1,16 +1,6 @@
 // Startansicht: Tablet (eine Kamera im Vollbild) oder Monitor (eine groß, Rest
 // in einer Leiste). Live-Bild über go2rtc (MSE), Zustand über Server-Sent Events.
-import { VideoRTC } from '../go2rtc/video-rtc.js';
-
-class CamVideo extends VideoRTC {
-  oninit() {
-    super.oninit();
-    this.video.controls = false;
-    this.video.muted = true;
-    this.video.playsInline = true;
-  }
-}
-customElements.define('cam-video', CamVideo);
+import { createVideo, closeVideo } from './video.js';
 
 const params = new URLSearchParams(location.search);
 const viewParam = params.get('view');
@@ -31,20 +21,11 @@ const now = () => Date.now();
 
 // ---------------------------------------------------------------- Video-Pool
 const videos = new Map();
-function wsUrl(stream) {
-  const u = new URL('go2rtc/api/ws', document.baseURI);
-  u.searchParams.set('src', stream);
-  return u.href;
-}
 function video(cam, quality) {
   const key = cam + '|' + quality;
   let el = videos.get(key);
   if (!el) {
-    el = document.createElement('cam-video');
-    el.mode = 'mse';
-    el.background = true;        // im Hintergrund weiterlaufen: Wechsel ohne Puffern
-    el.visibilityCheck = false;
-    el.src = wsUrl(quality === 'main' ? cam : cam + '_sub');
+    el = createVideo(quality === 'main' ? cam : cam + '_sub');
     videos.set(key, el);
   }
   return el;
@@ -52,8 +33,7 @@ function video(cam, quality) {
 function dropVideo(key) {
   const el = videos.get(key);
   if (!el) return;
-  el.background = false;         // jetzt darf VideoRTC die Verbindung schließen
-  el.remove();
+  closeVideo(el);
   videos.delete(key);
 }
 function mount(slot, cam, quality) {
@@ -108,8 +88,16 @@ function buildSkeleton(d) {
 }
 
 // ---------------------------------------------------------------- Rendern
+let details = null;  // Detailansicht (lazy geladen)
+const onDetails = () => location.hash.startsWith('#details') || location.hash.startsWith('#play');
+
 function render() {
   if (!S) return;
+  if (onDetails()) {
+    if (built) { for (const key of [...videos.keys()]) dropVideo(key); built = ''; root.innerHTML = ''; }
+    import('./details.js').then((m) => { details = m; m.render(root, S); });
+    return;
+  }
   const d = derive();
   buildSkeleton(d);
   const want = new Set();
@@ -250,7 +238,7 @@ function menuHtml(d) {
         <div class="row2"><button type="button" class="opt" data-act="allon">Alle an</button><button type="button" class="opt" data-act="alloff">Alle aus</button></div>
         ${rows.join('')}
         <span class="hint">${offCount ? offCount + ' von ' + d.cams.length + ' aus' : 'Alle nehmen auf und melden Bewegung'}</span></div>
-      <div class="foot"><button type="button" class="opt" data-act="fullscreen">Vollbild</button></div>
+      <div class="foot">${S.history ? '<a class="opt" href="#details">Details &amp; Verlauf<span aria-hidden="true">›</span></a>' : ''}<button type="button" class="opt" data-act="fullscreen">Vollbild</button></div>
     </aside>`;
 }
 
@@ -262,6 +250,7 @@ async function post(path, body) {
 }
 
 root.addEventListener('click', (e) => {
+  if (onDetails()) return;
   const el = e.target.closest('[data-act],[data-pin],[data-off],[data-tile]');
   if (!el || !S) return;
   const pinMs = S.pin_minutes * 60000;
@@ -284,10 +273,12 @@ root.addEventListener('click', (e) => {
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape' && menuOpen) { menuOpen = false; render(); } });
 addEventListener('resize', () => { if (!viewParam) render(); });
+addEventListener('hashchange', () => { if (!onDetails() && details) { details.leave(root); built = ''; } render(); });
 
 // ---------------------------------------------------------------- Takt + Daten
 setInterval(() => {
   if (!S) return;
+  if (onDetails()) { if (details) details.tick(root, S); return; }
   const d = derive();
   if (d.rotating && (now() - rotStart) / 1000 >= S.rotate_seconds) { rotIdx += 1; rotStart = now(); }
   if (!d.rotating) rotStart = now();

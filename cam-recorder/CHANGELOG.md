@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Detailansicht (⋯ → Details & Verlauf): Livebilder klein, Zeitleiste pro
+  Kamera und Tag (heute/gestern/vorgestern) mit Aufnahme-Abdeckung und
+  Ereignissen, Ereignisliste mit Snapshot.
+- Wiedergabe ±10 min um ein Ereignis direkt aus den Segmenten (HLS, kein
+  Transkodieren), −10/+10 s, 1×/2×/4×; Clip-Download als .mp4.
+- hls.js wird ins Image gepackt (kein CDN zur Laufzeit).
+
 ## 0.2.2
 
 - `recording: false`: nur Livebild, keine Aufnahme. go2rtc holt einen Stream
