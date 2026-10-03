@@ -1,0 +1,67 @@
+name: Cam Recorder
+version: "0.1.0"
+slug: cam_recorder
+description: Ringpuffer-Aufnahme für RTSP-Kameras, Ereignis-Clips nach Backblaze B2
+url: https://github.com/masteph92/ha-cam-recorder
+arch:
+  - aarch64
+  - amd64
+init: false
+startup: services
+boot: auto
+homeassistant_api: true
+# /tmp als tmpfs: Ausweichspeicher, wenn der Netzwerk-Share fehlt
+tmpfs: true
+map:
+  - type: share
+    read_only: false
+ports:
+  8554/tcp: null
+ports_description:
+  8554/tcp: RTSP-Restream (go2rtc), nur bei Bedarf freigeben
+options:
+  site: mg
+  segment_seconds: 5
+  audio: false
+  cameras: []
+  event:
+    pre_seconds: 30
+    post_seconds: 60
+    max_seconds: 600
+  storage:
+    primary: /share/cam-recorder
+    primary_max_gb: 450
+    fallback: /tmp/cam-recorder
+    fallback_keep_seconds: 120
+  upload:
+    enabled: false
+    remote: ""
+    b2_account: ""
+    b2_key: ""
+    daily_budget_gb: 5
+schema:
+  site: match(^[a-z0-9][a-z0-9_]*$)
+  segment_seconds: int(2,30)
+  audio: bool
+  cameras:
+    - name: match(^[a-z0-9][a-z0-9_]*$)
+      rtsp: password
+      triggers:
+        - str
+      suppress: str?
+      snapshot_url: password?
+  event:
+    pre_seconds: int(0,300)
+    post_seconds: int(10,600)
+    max_seconds: int(60,7200)
+  storage:
+    primary: str
+    primary_max_gb: float(1,)
+    fallback: str
+    fallback_keep_seconds: int(30,900)
+  upload:
+    enabled: bool
+    remote: str?
+    b2_account: str?
+    b2_key: password?
+    daily_budget_gb: float(0.1,)
