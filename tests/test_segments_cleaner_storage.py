@@ -61,3 +61,27 @@ def test_storage_needs_marker(tmp_path):
     (primary / storage.MARKER).touch()
     st = storage.select(primary, fb)
     assert st.kind == "primary" and st.root == primary
+
+
+MOUNTS = """overlay / overlay rw 0 0
+/dev/sda8 /share ext4 rw 0 0
+//192.168.1.20/cam-recorder /share/cam cifs rw 0 0
+"""
+
+
+def test_mount_fstype_longest_prefix():
+    assert storage.mount_fstype("/share/cam/sub", MOUNTS) == "cifs"
+    assert storage.mount_fstype("/share/cam-recorder", MOUNTS) == "ext4"
+    assert storage.mount_fstype("/share", MOUNTS) == "ext4"
+
+
+def test_ensure_marker_refuses_local_disk(tmp_path):
+    mounts = f"/dev/sda8 {tmp_path} ext4 rw 0 0\n"
+    assert storage.ensure_marker(tmp_path / "cam", mounts) is False
+    assert not (tmp_path / "cam" / storage.MARKER).exists()
+
+
+def test_ensure_marker_on_network_mount(tmp_path):
+    mounts = f"//nas/x {tmp_path} cifs rw 0 0\n"
+    assert storage.ensure_marker(tmp_path, mounts) is True
+    assert (tmp_path / storage.MARKER).is_file()

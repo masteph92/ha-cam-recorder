@@ -28,8 +28,10 @@ speicher und hält dort `fallback_keep_seconds`. So wird nie die HA-Platte
 vollgeschrieben.
 
 Netzwerk-Share in HA: Einstellungen → System → Speicher → Netzwerkspeicher
-hinzufügen, Verwendung **Share**. Dann im Share den Ordner `cam-recorder`
-anlegen und darin die leere Datei `.cam-recorder-root`.
+hinzufügen, Verwendung **Share**, Name z. B. `cam` → im Add-on
+`storage.primary: /share/cam`. Den Marker legt das Add-on mit
+`storage.create_marker: true` selbst an – nur wenn der Pfad wirklich auf
+einem CIFS/NFS-Mount liegt. Danach kann die Option wieder aus.
 
 Aufgeräumt wird über `primary_max_gb`: erst die ältesten ruhigen Segmente,
 Ereignis-Segmente zuletzt, nichts, was noch hochgeladen werden muss.

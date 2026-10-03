@@ -40,6 +40,7 @@ class Config:
     primary_max_gb: float = 450
     fallback: str = "/tmp/cam-recorder"
     fallback_keep_seconds: int = 120
+    create_marker: bool = False
     upload_enabled: bool = False
     remote: str = ""
     b2_account: str = ""
@@ -98,6 +99,7 @@ def parse(raw: dict) -> Config:
         primary_max_gb=float(_opt(st, "primary_max_gb", 450)),
         fallback=str(_opt(st, "fallback", "/tmp/cam-recorder")),
         fallback_keep_seconds=int(_opt(st, "fallback_keep_seconds", 120)),
+        create_marker=bool(_opt(st, "create_marker", False)),
         upload_enabled=bool(_opt(up, "enabled", False)),
         remote=str(_opt(up, "remote", "")),
         b2_account=str(_opt(up, "b2_account", "")),

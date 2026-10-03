@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- `storage.create_marker`: legt `.cam-recorder-root` selbst an, aber nur wenn
+  `storage.primary` auf einem CIFS/NFS-Mount liegt (laut /proc/mounts).
+
 ## 0.1.1
 
 - go2rtc-Oberfläche als Seitenleisten-Eintrag „Kameras“ (Ingress): Livebild

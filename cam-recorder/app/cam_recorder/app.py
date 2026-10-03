@@ -154,7 +154,7 @@ class App:
 
     # ------------------------------------------------------------ storage
     def check_storage(self) -> storage.Store:
-        st = storage.select(self.cfg.primary, self.cfg.fallback)
+        st = storage.select(self.cfg.primary, self.cfg.fallback, self.cfg.create_marker)
         if st.kind != self.store.kind:
             log.warning("storage: %s -> %s (%s)", self.store.kind, st.kind, st.root)
         self.store = st

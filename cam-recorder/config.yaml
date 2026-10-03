@@ -1,5 +1,5 @@
 name: Cam Recorder
-version: "0.1.1"
+version: "0.1.2"
 slug: cam_recorder
 description: Ringpuffer-Aufnahme für RTSP-Kameras, Ereignis-Clips nach Backblaze B2
 url: https://github.com/masteph92/ha-cam-recorder
@@ -39,6 +39,7 @@ options:
     primary_max_gb: 450
     fallback: /tmp/cam-recorder
     fallback_keep_seconds: 120
+    create_marker: false
   upload:
     enabled: false
     remote: ""
@@ -65,6 +66,7 @@ schema:
     primary_max_gb: float(1,)
     fallback: str
     fallback_keep_seconds: int(30,900)
+    create_marker: bool
   upload:
     enabled: bool
     remote: str?
