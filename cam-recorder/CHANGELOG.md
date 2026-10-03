@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+- `recording: false`: nur Livebild, keine Aufnahme. go2rtc holt einen Stream
+  nur, solange jemand zuschaut – für Standorte mit Funkstrecke oder 5G, an
+  denen (noch) nichts gespeichert werden soll.
+
 ## 0.2.1
 
 - Live-Zustand über WebSocket statt Server-Sent Events: der HA-Ingress-Proxy

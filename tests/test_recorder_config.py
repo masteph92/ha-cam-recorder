@@ -112,3 +112,8 @@ def test_collect_never_overwrites_existing_segment(tmp_path):
     assert Path(done[0].path).name == "20261003T200000Z-1.ts"
     assert (day / "20261003T200000Z.ts").read_bytes() == b"old"
     assert parse_name("20261003T200000Z-1.ts") == parse_name("20261003T200000Z.ts")
+
+
+def test_recording_default_on_and_switchable():
+    assert parse(RAW).recording is True
+    assert parse({**RAW, "recording": False}).recording is False

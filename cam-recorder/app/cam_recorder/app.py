@@ -277,11 +277,16 @@ class App:
         if closed:
             log.info("closed %d events left open by a restart", closed)
 
-        for c in self.cfg.cameras:
+        for c in self.cfg.cameras if self.cfg.recording else ():
             self.recorders[c.name] = Recorder(
                 c.name, go2rtc.local_url(c.name), self.cfg.segment_seconds, self.cfg.audio,
                 on_segment=self.on_segment, on_state=self._set_cam_state)
-        self.check_storage()
+        if self.cfg.recording:
+            self.check_storage()
+        else:
+            log.info("recording: false – live view only, nothing is stored")
+            for cam in self.cams:
+                self.ui.recording(cam, "live")
         self.restore_pauses()
         if not self.cfg.kiosk_key:
             log.info("no ui.kiosk_key: LAN port locked, UI only via HA sidebar")
@@ -298,8 +303,8 @@ class App:
             self.uploader.run(),
             *(r.run() for r in self.recorders.values()),
             self._every(TICK, self.tick),
-            self._every(STORAGE_CHECK, self.check_storage),
-            self._every(CLEAN_EVERY, self.clean),
+            *([self._every(STORAGE_CHECK, self.check_storage),
+               self._every(CLEAN_EVERY, self.clean)] if self.cfg.recording else []),
             self._every(HEALTH_EVERY, lambda: loop.create_task(self._publish_health(ha)) if ha else None),
         ]
         await asyncio.gather(*tasks)

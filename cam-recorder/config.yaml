@@ -1,5 +1,5 @@
 name: Cam Recorder
-version: "0.2.1"
+version: "0.2.2"
 slug: cam_recorder
 description: Ringpuffer-Aufnahme für RTSP-Kameras, Ereignis-Clips nach Backblaze B2
 url: https://github.com/masteph92/ha-cam-recorder
@@ -30,6 +30,7 @@ ports_description:
 options:
   site: mg
   segment_seconds: 5
+  recording: true
   audio: false
   cameras: []
   event:
@@ -56,6 +57,7 @@ options:
 schema:
   site: match(^[a-z0-9][a-z0-9_]*$)
   segment_seconds: int(2,30)
+  recording: bool
   audio: bool
   cameras:
     - name: match(^[a-z0-9][a-z0-9_]*$)

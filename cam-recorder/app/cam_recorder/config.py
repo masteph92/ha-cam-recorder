@@ -37,6 +37,9 @@ class Config:
     # ffmpeg cuts only on keyframes; below the camera GOP (Tapo ~8 s) every
     # keyframe starts a segment, above it segments become 2 GOPs long.
     segment_seconds: int = 5
+    # False: nur Livebild – keine Aufnahme, go2rtc holt Streams nur, solange
+    # jemand zuschaut (spart Funkstrecke und 5G-Volumen)
+    recording: bool = True
     audio: bool = False
     pre_seconds: int = 30
     post_seconds: int = 60
@@ -108,6 +111,7 @@ def parse(raw: dict) -> Config:
         site=site,
         cameras=tuple(cams),
         segment_seconds=int(_opt(raw, "segment_seconds", 5)),
+        recording=bool(raw.get("recording", True)),
         audio=bool(_opt(raw, "audio", False)),
         pre_seconds=int(_opt(ev, "pre_seconds", 30)),
         post_seconds=int(_opt(ev, "post_seconds", 60)),
