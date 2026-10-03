@@ -2,12 +2,17 @@
 
 ## 0.3.0
 
-- Detailansicht (⋯ → Details & Verlauf): Livebilder klein, Zeitleiste pro
-  Kamera und Tag (heute/gestern/vorgestern) mit Aufnahme-Abdeckung und
-  Ereignissen, Ereignisliste mit Snapshot.
+- Übersicht (⋯ → Übersicht): alle Kameras gleich groß, darunter Zustand,
+  Tor, Empfang und Speicher.
+- Kamera-Detail (`#cam/<name>`): großes Livebild, Zeitleiste für
+  heute/gestern/vorgestern mit Aufnahme-Abdeckung und Ereignissen,
+  Ereignisliste mit Snapshot.
+- Anzeige „Alle gleich groß“ (oder `?view=grid`), pro Bildschirm gemerkt.
 - Wiedergabe ±10 min um ein Ereignis direkt aus den Segmenten (HLS, kein
   Transkodieren), −10/+10 s, 1×/2×/4×; Clip-Download als .mp4.
 - hls.js wird ins Image gepackt (kein CDN zur Laufzeit).
+- Snapshot aus dem ersten Bild des Segments (`-sseof` schrieb bei MPEG-TS
+  nichts); Clip-Liste als Datei in /tmp statt über eine Pipe.
 
 ## 0.2.2
 

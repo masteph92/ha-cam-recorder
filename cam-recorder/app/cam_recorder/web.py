@@ -192,15 +192,17 @@ def make_app(*, snapshot: Callable[[], dict], subscribe, unsubscribe,
         segs = archive.segments(ev["cam"], t0, t1)
         if not segs:
             raise web.HTTPNotFound(text="no segments left for this event")
-        listing = "".join(f"file '{sg.path}'\n" for sg in segs)
+        # concat list as a file in /tmp (tmpfs): from a pipe ffmpeg prefixes
+        # every entry with "pipe:" and finds nothing
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", dir="/tmp" if Path("/tmp").is_dir() else None,
+                                         delete=False) as lf:
+            lf.write("".join(f"file '{sg.path}'\n" for sg in segs))
         proc = await asyncio.create_subprocess_exec(
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0",
-            "-protocol_whitelist", "file,pipe", "-i", "pipe:0", "-c", "copy",
+            "-i", lf.name, "-c", "copy",
             "-movflags", "frag_keyframe+empty_moov", "-f", "mp4", "pipe:1",
-            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
-        proc.stdin.write(listing.encode())
-        await proc.stdin.drain()
-        proc.stdin.close()
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(ev["start"]))
         resp = web.StreamResponse(headers={
             "Content-Type": "video/mp4",
@@ -213,6 +215,10 @@ def make_app(*, snapshot: Callable[[], dict], subscribe, unsubscribe,
             if proc.returncode is None:
                 proc.kill()
             await proc.wait()
+            Path(lf.name).unlink(missing_ok=True)
+            if proc.returncode:
+                err = (await proc.stderr.read()).decode(errors="replace").strip().splitlines()[-1:]
+                log.warning("clip %s: ffmpeg %s %s", ev["id"], proc.returncode, err)
         return resp
 
     app = web.Application(middlewares=[auth])

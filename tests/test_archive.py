@@ -91,3 +91,13 @@ def test_history_and_vod_endpoints(arch, monkeypatch):
             assert (await c.get("/api/seg/vorzimmer/..%2F..%2Fetc%2Fpasswd")).status == 404
             assert (await c.get("/api/snapshot/abc123def456.jpg")).status == 200
     asyncio.run(go())
+
+
+def test_snapshot_uses_first_frame():
+    # "-sseof" seeks past the last keyframe in MPEG-TS and writes nothing
+    from cam_recorder.snapshot import frame_cmd
+
+    cmd = frame_cmd("/x/seg.ts", Path("/x/out.jpg"))
+    assert "-sseof" not in cmd
+    assert cmd[cmd.index("-i") + 1] == "/x/seg.ts"
+    assert cmd[cmd.index("-frames:v") + 1] == "1"

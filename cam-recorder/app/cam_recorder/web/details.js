@@ -1,5 +1,4 @@
-// Detailansicht: Zeitleiste pro Tag, Ereignisliste, Wiedergabe aus den Segmenten.
-// Route: #details[/<tag-offset>]  und  #play/<event-id>
+// Übersicht (#overview), Kamera-Detail (#cam/<id>[/<tag>]) und Wiedergabe (#play/<event>).
 import { createVideo, closeVideo } from './video.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -11,15 +10,18 @@ const gb = (b) => (b / 1024 ** 3).toFixed(b > 10 * 1024 ** 3 ? 0 : 1);
 
 let H = null;          // geladener Verlauf
 let loadedKey = '';
-let live = new Map();  // kleine Livebilder oben
-let player = null;     // { hls, video, ev, t0, t1 }
+const live = new Map(); // Livebilder: key = cam|quality
+let player = null;
 let mounted = '';
 
-function route() {
-  const h = location.hash;
-  if (h.startsWith('#play/')) return { page: 'play', id: decodeURIComponent(h.slice(6)) };
-  const off = parseInt(h.split('/')[1] || '0', 10);
-  return { page: 'list', day: Number.isNaN(off) ? 0 : Math.min(Math.max(off, 0), 2) };
+export function route() {
+  const [page, a, b] = location.hash.slice(1).split('/');
+  if (page === 'play') return { page, id: decodeURIComponent(a || '') };
+  if (page === 'cam') {
+    const day = parseInt(b || '0', 10);
+    return { page, cam: decodeURIComponent(a || ''), day: Number.isNaN(day) ? 0 : Math.min(Math.max(day, 0), 2) };
+  }
+  return { page: 'overview' };
 }
 
 function dayRange(offset) {
@@ -30,17 +32,36 @@ function dayRange(offset) {
   return [start, start + 86400];
 }
 
-async function load(start, end) {
+async function load(start, end, force = false) {
   const key = start + ':' + end;
-  if (key === loadedKey && H) return;
+  if (!force && key === loadedKey && H) return;
   loadedKey = key;
-  const r = await fetch(`api/history?start=${start}&end=${end}`, { cache: 'no-store' });
-  H = r.ok ? await r.json() : { events: [], coverage: {}, storage: {} };
+  try {
+    const r = await fetch(`api/history?start=${start}&end=${end}`, { cache: 'no-store' });
+    H = r.ok ? await r.json() : null;
+  } catch (e) { H = null; }
+  H = H || { events: [], coverage: {}, storage: {} };
+}
+
+function sigInfo(c) {
+  if (c.lost) return { text: 'kein Empfang', cls: 'lost' };
+  if (c.signal === null || c.signal === undefined) return c.wired ? { text: 'Kabel', cls: 'good' } : null;
+  const d = Math.round(c.signal);
+  return { text: '−' + Math.abs(d) + ' dBm', cls: d > -65 ? 'good' : d > -70 ? 'mid' : 'weak' };
+}
+
+// ---------------------------------------------------------------- Livebilder
+function mountLive(box, stream, key) {
+  let el = live.get(key);
+  if (!el) { el = createVideo(stream); live.set(key, el); }
+  if (el.parentElement !== box) box.prepend(el);
+}
+function pruneLive(keep) {
+  for (const [k, el] of live) if (!keep.has(k)) { closeVideo(el); live.delete(k); }
 }
 
 export function leave(root) {
-  for (const el of live.values()) closeVideo(el);
-  live.clear();
+  pruneLive(new Set());
   stopPlayer();
   mounted = '';
   root.innerHTML = '';
@@ -48,84 +69,125 @@ export function leave(root) {
 
 export function tick(root, S) {
   const r = route();
-  if (r.page === 'list') {
-    const now = Date.now() / 1000;
-    const [s, e] = dayRange(r.day);
+  if (r.page === 'cam' && r.day === 0) {
+    const [s] = dayRange(0);
     const nl = root.querySelector('.d-now');
-    if (nl && now < e) nl.style.left = ((now - s) / 864) + '%';
-  } else if (player) {
-    updatePlayer(root);
-  }
+    if (nl) nl.style.left = ((Date.now() / 1000 - s) / 864) + '%';
+  } else if (r.page === 'play' && player) updatePlayer(root);
 }
 
 export async function render(root, S) {
   const r = route();
-  const sig = r.page + ':' + (r.page === 'play' ? r.id : r.day);
-  if (sig === mounted) { updateLive(root, S); return; }
+  const sig = JSON.stringify(r);
+  if (sig === mounted) { refresh(root, S, r); return; }
   mounted = sig;
   stopPlayer();
-  if (r.page === 'play') return renderPlay(root, S, r.id);
-  const [start, end] = dayRange(r.day);
-  root.innerHTML = '<div class="d-page"><p class="d-muted">Lade Verlauf …</p></div>';
-  await load(start, end);
-  if (mounted !== sig) return;
-  renderList(root, S, r.day, start, end);
+  if (r.page === 'overview') return renderOverview(root, S);
+  if (r.page === 'cam') return renderCam(root, S, r);
+  return renderPlay(root, S, r.id);
 }
 
-// ---------------------------------------------------------------- Liste
-function renderList(root, S, day, start, end) {
-  const cams = S.cams;
-  const st = H.storage || {};
-  const recCount = cams.filter((c) => !c.off).length;
+function refresh(root, S, r) {
+  if (r.page === 'overview') updateOverview(root, S);
+  if (r.page === 'cam') updateCamLive(root, S, r.cam);
+}
+
+function head(S, back, title, extra = '') {
+  return `<header class="d-head"><a class="d-back" href="${back}">‹ ${back === '#' ? 'Live' : 'Zurück'}</a><h1>${title}</h1>${extra}</header>`;
+}
+
+// ---------------------------------------------------------------- Übersicht: alle gleich groß + Infos
+async function renderOverview(root, S) {
+  root.innerHTML = `<div class="d-page">${head(S, '#', esc(S.title) + ' · Übersicht')}
+    <section class="d-grid">${S.cams.map((c) => `<a class="d-tile" href="#cam/${encodeURIComponent(c.id)}" data-tile="${esc(c.id)}">
+      <span class="d-tl2">${esc(c.label)}</span><span class="d-tinfo"></span></a>`).join('')}</section>
+    <section class="d-card"><h2>Status</h2><div class="d-table" id="d-status"></div></section>
+    <p class="d-muted" id="d-store"></p></div>`;
+  updateOverview(root, S);
+  if (S.history) {
+    const [s, e] = dayRange(0);
+    await load(s, e, true);
+    const st = H.storage || {};
+    const el = root.querySelector('#d-store');
+    if (el && st.used_bytes != null) {
+      el.textContent = `Speicher: ${st.store === 'primary' ? 'Netzlaufwerk' : 'Arbeitsspeicher'} ${gb(st.used_bytes)}${st.max_bytes ? ' / ' + gb(st.max_bytes) : ''} GB · Upload ${st.upload ? 'an' : 'aus'} · ${H.events.length} Ereignisse heute`;
+    }
+  }
+}
+
+function updateOverview(root, S) {
+  const keep = new Set();
+  for (const c of S.cams) {
+    const t = root.querySelector(`[data-tile="${CSS.escape(c.id)}"]`);
+    if (!t) continue;
+    t.classList.toggle('alert', !!c.motion_since);
+    t.classList.toggle('off', c.off);
+    const s = sigInfo(c);
+    t.querySelector('.d-tinfo').innerHTML =
+      (c.motion_since ? '<span class="d-dot"></span>' : '') +
+      (c.door === 'open' ? '<span class="d-door">Tor offen</span>' : '') +
+      (s ? `<span class="sig ${s.cls} d-tsig">${esc(s.text)}</span>` : '');
+    if (c.off) { t.querySelector('cam-video')?.remove(); continue; }
+    mountLive(t, c.id + '_sub', c.id + '|sub');
+    keep.add(c.id + '|sub');
+  }
+  pruneLive(keep);
+  const rows = S.cams.map((c) => {
+    const s = sigInfo(c);
+    const state = c.off ? (c.off_reason === 'privacy' ? 'Privat · aus' : 'Pausiert')
+      : c.motion_since ? 'Bewegung' : ({ recording: 'Aufnahme', live: 'Live', reconnecting: 'verbindet …', degraded: 'Aufnahme (RAM)', suppressed: 'aus' }[c.recording] || c.recording);
+    return `<a class="d-tr" href="#cam/${encodeURIComponent(c.id)}"><span>${esc(c.label)}</span><span class="${c.motion_since ? 'd-alert' : ''}">${esc(state)}</span>` +
+      `<span class="${c.door === 'open' ? 'd-alert' : 'd-muted'}">${c.door === 'open' ? 'Tor offen' : c.door === 'closed' ? 'Tor zu' : ''}</span>` +
+      `<span class="sig ${s ? s.cls : ''} d-mono">${s ? esc(s.text) : ''}</span><span aria-hidden="true">›</span></a>`;
+  }).join('');
+  const tbl = root.querySelector('#d-status');
+  if (tbl) tbl.innerHTML = rows;
+}
+
+// ---------------------------------------------------------------- Kamera-Detail
+async function renderCam(root, S, r) {
+  const c = S.cams.find((x) => x.id === r.cam);
+  if (!c) { root.innerHTML = `<div class="d-page">${head(S, '#overview', 'Kamera nicht gefunden')}</div>`; return; }
+  const [start, end] = dayRange(r.day);
+  root.innerHTML = `<div class="d-page">${head(S, '#overview', esc(c.label))}
+    <div class="d-big" data-big="${esc(c.id)}"><span class="d-binfo"></span></div>
+    ${S.history ? '<section class="d-card" id="d-tl"><p class="d-muted">Lade Verlauf …</p></section><section id="d-evs"></section>' : '<p class="d-muted">An diesem Standort wird nicht aufgenommen – nur Livebild.</p>'}
+  </div>`;
+  updateCamLive(root, S, c.id);
+  if (!S.history) return;
+  await load(start, end, true);
+  if (mounted !== JSON.stringify(route())) return;
   const now = Date.now() / 1000;
   const pct = (t) => ((Math.min(Math.max(t, start), end) - start) / 864).toFixed(3) + '%';
-  const days = ['Heute', 'Gestern', 'Vorgestern'].map((label, i) =>
-    `<a class="d-pill" href="#details/${i}" aria-current="${i === day}">${label}</a>`).join('');
-  const tracks = cams.map((c) => {
-    const cov = (H.coverage[c.id] || []).map(([a, b]) =>
-      `<span class="d-cov" style="left:${pct(a)};width:calc(${pct(b)} - ${pct(a)})"></span>`).join('');
-    const evs = H.events.filter((e) => e.cam === c.id).map((e) =>
-      `<a class="d-mark" href="#play/${esc(e.id)}" style="left:${pct(e.start)}" aria-label="Ereignis ${hms(e.start)}"><span></span></a>`).join('');
-    return `<div class="d-track"><span class="d-tl">${esc(c.label)}</span><div class="d-bar">${cov}${evs}${day === 0 ? `<span class="d-now" style="left:${pct(now)}"></span>` : ''}</div></div>`;
-  }).join('');
-  const label = Object.fromEntries(cams.map((c) => [c.id, c.label]));
-  const events = H.events.length ? H.events.map((e) => {
-    const len = (e.end ?? now) - e.start;
-    const img = e.snapshot ? `<img src="api/snapshot/${esc(e.id)}.jpg" alt="" loading="lazy">` : '<span class="d-noimg">kein Bild</span>';
-    return `<div class="d-ev">${img}<div class="d-evt"><b>${esc(label[e.cam] || e.cam)}</b> <span class="d-mono">${hms(e.start)}</span>` +
-      `<span class="d-muted">${e.end ? 'Bewegung · ' + dur(len) : 'läuft gerade'}</span></div>` +
-      `<a class="d-btn d-primary" href="#play/${esc(e.id)}">Ansehen</a><a class="d-btn" href="api/clip/${esc(e.id)}.mp4" download>Clip laden</a></div>`;
-  }).join('') : '<p class="d-muted">Keine Ereignisse an diesem Tag.</p>';
-  const used = st.used_bytes != null ? `${gb(st.used_bytes)}${st.max_bytes ? ' / ' + gb(st.max_bytes) : ''} GB` : '';
-  root.innerHTML = `<div class="d-page">
-    <header class="d-head"><a class="d-back" href="#">‹ Live</a><h1>${esc(S.title)} · Verlauf</h1>
-      <span class="d-chip">${recCount} / ${cams.length} nehmen auf</span>
-      ${used ? `<span class="d-chip d-mono">${st.store === 'primary' ? 'DS' : 'RAM'} ${used}</span>` : ''}
-      <span class="d-chip">${st.upload ? 'Upload an' : 'Upload aus'}</span></header>
-    <section class="d-live">${cams.map((c) => `<div class="d-lt" data-live="${esc(c.id)}"><span class="d-ltl">${esc(c.label)}</span></div>`).join('')}</section>
-    <section class="d-card"><div class="d-row"><h2>Zeitleiste</h2><nav class="d-days">${days}</nav></div>
-      <div class="d-scroll"><div class="d-tracks"><div class="d-track d-axis"><span></span><div>${[0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => `<span>${pad(h)}</span>`).join('')}</div></div>${tracks}
-      <div class="d-legend"><span><i class="d-cov-i"></i>aufgenommen</span><span><i class="d-mark-i"></i>Bewegung</span>${day === 0 ? '<span><i class="d-now-i"></i>jetzt</span>' : ''}</div></div></div></section>
-    <section><div class="d-row"><h2>Ereignisse</h2><span class="d-muted">${H.events.length}</span></div><div class="d-list">${events}</div></section>
-  </div>`;
-  updateLive(root, S);
+  const cov = (H.coverage[c.id] || []).map(([a, b]) => `<span class="d-cov" style="left:${pct(a)};width:calc(${pct(b)} - ${pct(a)})"></span>`).join('');
+  const evs = H.events.filter((e) => e.cam === c.id);
+  const marks = evs.map((e) => `<a class="d-mark" href="#play/${esc(e.id)}" style="left:${pct(e.start)}" aria-label="Ereignis ${hms(e.start)}"><span></span></a>`).join('');
+  const days = ['Heute', 'Gestern', 'Vorgestern'].map((l, i) => `<a class="d-pill" href="#cam/${encodeURIComponent(c.id)}/${i}" aria-current="${i === r.day}">${l}</a>`).join('');
+  root.querySelector('#d-tl').innerHTML = `<div class="d-row"><h2>Zeitleiste</h2><nav class="d-days">${days}</nav></div>
+    <div class="d-axis"><div>${[0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => `<span>${pad(h)}</span>`).join('')}</div></div>
+    <div class="d-bar d-bar-solo">${cov}${marks}${r.day === 0 ? `<span class="d-now" style="left:${pct(now)}"></span>` : ''}</div>
+    <div class="d-legend"><span><i class="d-cov-i"></i>aufgenommen</span><span><i class="d-mark-i"></i>Bewegung</span></div>`;
+  root.querySelector('#d-evs').innerHTML = `<div class="d-row"><h2>Ereignisse</h2><span class="d-muted">${evs.length}</span></div>` +
+    (evs.length ? `<div class="d-list">${evs.map((e) => {
+      const img = e.snapshot ? `<img src="api/snapshot/${esc(e.id)}.jpg" alt="" loading="lazy">` : '<span class="d-noimg">kein Bild</span>';
+      return `<div class="d-ev">${img}<div class="d-evt"><span class="d-mono">${hms(e.start)}</span><span class="d-muted">${e.end ? 'Bewegung · ' + dur(e.end - e.start) : 'läuft gerade'}</span></div>` +
+        `<a class="d-btn d-primary" href="#play/${esc(e.id)}">Ansehen</a><a class="d-btn" href="api/clip/${esc(e.id)}.mp4" download>Clip laden</a></div>`;
+    }).join('')}</div>` : '<p class="d-muted">Keine Ereignisse an diesem Tag.</p>');
 }
 
-function updateLive(root, S) {
-  for (const c of S.cams) {
-    const box = root.querySelector(`[data-live="${CSS.escape(c.id)}"]`);
-    if (!box) continue;
-    box.classList.toggle('alert', !!c.motion_since);
-    if (c.off) {
-      if (live.has(c.id)) { closeVideo(live.get(c.id)); live.delete(c.id); }
-      if (!box.querySelector('.d-off')) box.insertAdjacentHTML('afterbegin', '<span class="d-off">aus</span>');
-      continue;
-    }
-    box.querySelector('.d-off')?.remove();
-    if (!live.has(c.id)) live.set(c.id, createVideo(c.id + '_sub'));
-    const el = live.get(c.id);
-    if (el.parentElement !== box) box.prepend(el);
-  }
+function updateCamLive(root, S, id) {
+  const c = S.cams.find((x) => x.id === id);
+  const box = root.querySelector('.d-big');
+  if (!c || !box) return;
+  box.classList.toggle('alert', !!c.motion_since);
+  const s = sigInfo(c);
+  box.querySelector('.d-binfo').innerHTML = (c.motion_since ? '<span class="chip motion"><span class="dot"></span>Bewegung</span>' : '') +
+    (c.door === 'open' ? '<span class="chip door">Tor offen</span>' : '') +
+    (c.off ? `<span class="chip off">${c.off_reason === 'privacy' ? 'Privat · Kamera aus' : 'Pausiert'}</span>` : '') +
+    (s ? `<span class="chip sig ${s.cls}" style="position:static">${esc(s.text)}</span>` : '');
+  if (c.off) { pruneLive(new Set()); return; }
+  mountLive(box, c.id, c.id + '|main');
+  pruneLive(new Set([c.id + '|main']));
 }
 
 // ---------------------------------------------------------------- Wiedergabe
@@ -148,18 +210,16 @@ async function loadHls() {
 }
 
 async function renderPlay(root, S, id) {
-  for (const el of live.values()) closeVideo(el);
-  live.clear();
+  pruneLive(new Set());
   const now = Date.now() / 1000;
   const [ds] = dayRange(2);
-  await load(ds, now + 60);
+  await load(ds, now + 60, true);
   const ev = H.events.find((e) => e.id === id);
-  if (!ev) { root.innerHTML = '<div class="d-page"><a class="d-back" href="#details">‹ Verlauf</a><p class="d-muted">Ereignis nicht gefunden.</p></div>'; return; }
-  const cam = S.cams.find((c) => c.id === ev.cam) || { label: ev.cam };
+  if (!ev) { root.innerHTML = `<div class="d-page">${head(S, '#overview', 'Ereignis nicht gefunden')}</div>`; return; }
+  const cam = S.cams.find((c) => c.id === ev.cam) || { label: ev.cam, id: ev.cam };
   const t0 = ev.start - 600;
   const t1 = Math.min((ev.end ?? now) + 600, now);
-  root.innerHTML = `<div class="d-page">
-    <header class="d-head"><a class="d-back" href="#details">‹ Verlauf</a><h1>${esc(cam.label)} <span class="d-mono d-muted">${hms(ev.start)}</span></h1></header>
+  root.innerHTML = `<div class="d-page">${head(S, '#cam/' + encodeURIComponent(cam.id), esc(cam.label) + ` <span class="d-mono d-muted">${hms(ev.start)}</span>`)}
     <div class="d-playwrap">
       <div class="d-video"><video playsinline muted></video><span class="d-clock d-mono">–</span><span class="d-speed"></span></div>
       <aside class="d-card d-side"><h2>Ereignis</h2>
@@ -176,21 +236,18 @@ async function renderPlay(root, S, id) {
   const video = root.querySelector('video');
   const src = `api/vod/${encodeURIComponent(ev.cam)}.m3u8?start=${t0}&end=${t1}`;
   player = { video, ev, t0, t1, hls: null };
-  if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = src;
-  } else {
+  if (video.canPlayType('application/vnd.apple.mpegurl')) video.src = src;
+  else {
     const Hls = await loadHls();
     player.hls = new Hls({ maxBufferLength: 30 });
     player.hls.loadSource(src);
     player.hls.attachMedia(video);
   }
-  video.addEventListener('loadedmetadata', () => {
-    // Start 30 s vor dem Ereignis (die Playlist beginnt 10 min davor)
-    video.currentTime = Math.max(0, ev.start - 30 - t0);
-  }, { once: true });
-  const span = root.querySelector('.d-span');
+  video.addEventListener('loadedmetadata', () => { video.currentTime = Math.max(0, ev.start - 30 - t0); }, { once: true });
+  video.addEventListener('timeupdate', () => updatePlayer(root));
   const total = t1 - t0;
-  span.style.left = ((ev.start - 30 - t0) / total * 100) + '%';
+  const span = root.querySelector('.d-span');
+  span.style.left = (Math.max(0, ev.start - 30 - t0) / total * 100) + '%';
   span.style.width = (((ev.end ?? now) - ev.start + 30) / total * 100) + '%';
   root.querySelector('.d-scrub input').addEventListener('input', (e) => {
     if (video.duration) video.currentTime = e.target.value / 1000 * video.duration;
@@ -209,7 +266,8 @@ async function renderPlay(root, S, id) {
 }
 
 function updatePlayer(root) {
-  const { video, t0, t1 } = player;
+  if (!player) return;
+  const { video, t0 } = player;
   const clock = root.querySelector('.d-clock');
   if (clock) clock.textContent = hms(t0 + video.currentTime);
   const sp = root.querySelector('.d-speed');

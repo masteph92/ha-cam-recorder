@@ -11,8 +11,10 @@ log = logging.getLogger(__name__)
 
 
 def frame_cmd(segment: str, out: Path) -> list[str]:
+    # First frame: every segment starts on a keyframe. "-sseof" seeks past the
+    # last keyframe in MPEG-TS and silently writes nothing.
     return ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-            "-sseof", "-1", "-i", segment, "-frames:v", "1", "-q:v", "3", str(out)]
+            "-i", segment, "-frames:v", "1", "-update", "1", "-q:v", "3", str(out)]
 
 
 def url_cmd(url: str, out: Path) -> list[str]:

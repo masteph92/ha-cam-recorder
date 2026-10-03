@@ -1,5 +1,6 @@
-// Startansicht: Tablet (eine Kamera im Vollbild) oder Monitor (eine groß, Rest
-// in einer Leiste). Live-Bild über go2rtc (MSE), Zustand über Server-Sent Events.
+// Startansicht: Tablet (eine Kamera im Vollbild), Monitor (eine groß, Rest in
+// einer Leiste) oder Raster (alle gleich groß). Live-Bild über go2rtc (MSE),
+// Zustand über WebSocket. Übersicht und Kamera-Detail lädt details.js nach.
 import { createVideo, closeVideo } from './video.js';
 
 const params = new URLSearchParams(location.search);
@@ -15,8 +16,15 @@ let menuOpen = false;
 let rotateOn = true;
 let built = '';            // Signatur des aufgebauten Gerüsts
 
+// Bildschirmeigene Einstellung; ohne Browser-Speicher gilt der Standard
+const local = {
+  get(k) { try { return localStorage.getItem('cam-recorder:' + k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem('cam-recorder:' + k, v); } catch (e) { /* egal */ } },
+};
+let gridOn = local.get('grid') === '1';
+
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const view = () => viewParam || (innerWidth >= 1400 ? 'monitor' : 'tablet');
+const view = () => viewParam || (gridOn ? 'grid' : innerWidth >= 1400 ? 'monitor' : 'tablet');
 const now = () => Date.now();
 
 // ---------------------------------------------------------------- Video-Pool
@@ -53,12 +61,14 @@ function derive() {
   const rotCam = ring[rotIdx % ring.length];
   const nextCam = ring[(rotIdx + 1) % ring.length];
   const tablet = view() === 'tablet';
+  const grid = view() === 'grid';
+  if (grid) pin = null;
   const split = tablet && !pin && motions.length === 2;
   const main = pin ? pin.cam : (newest || (rotateOn ? rotCam : ring[0]));
   const showAlso = tablet && !split && (motions.length >= 3 || (pin && motions.length >= 1));
   const also = showAlso ? motions.filter((id) => id !== main).reverse() : [];
-  const rotating = !split && !pin && !newest && rotateOn && ring.length > 1;
-  return { cams, byId, motions, newest, main, nextCam, split, also, rotating, tablet };
+  const rotating = !grid && !split && !pin && !newest && rotateOn && ring.length > 1;
+  return { cams, byId, motions, newest, main, nextCam, split, also, rotating, tablet, grid };
 }
 
 function sigInfo(c) {
@@ -75,7 +85,13 @@ function buildSkeleton(d) {
   if (sig === built) return;
   built = sig;
   for (const key of [...videos.keys()]) dropVideo(key);
-  if (d.tablet) {
+  if (d.grid) {
+    const n = d.cams.length;
+    const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
+    root.innerHTML = `<div class="grid" style="grid-template-columns:repeat(${cols},minmax(0,1fr));grid-template-rows:repeat(${Math.ceil(n / cols)},minmax(0,1fr))">${d.cams.map((c) =>
+      `<button type="button" class="tile gtile" data-open="${esc(c.id)}" aria-label="${esc(c.label)} öffnen"><div class="slot"></div><span class="tov"></span></button>`).join('')}</div>
+      <div id="ov"></div>`;
+  } else if (d.tablet) {
     root.innerHTML = d.cams.map((c) => `<div class="layer" data-layer="${esc(c.id)}"><div class="slot"></div></div>`).join('') +
       '<div id="ov"></div>';
   } else {
@@ -89,7 +105,7 @@ function buildSkeleton(d) {
 
 // ---------------------------------------------------------------- Rendern
 let details = null;  // Detailansicht (lazy geladen)
-const onDetails = () => location.hash.startsWith('#details') || location.hash.startsWith('#play');
+const onDetails = () => /^#(overview|details|cam\/|play\/)/.test(location.hash);
 
 function render() {
   if (!S) return;
@@ -102,7 +118,7 @@ function render() {
   buildSkeleton(d);
   const want = new Set();
 
-  if (d.tablet) renderTablet(d, want); else renderMonitor(d, want);
+  if (d.grid) renderGrid(d, want); else if (d.tablet) renderTablet(d, want); else renderMonitor(d, want);
 
   // nicht mehr benötigte Streams schließen (wichtig für schwache Tablets)
   for (const key of [...videos.keys()]) if (!want.has(key)) dropVideo(key);
@@ -132,6 +148,32 @@ function renderTablet(d, want) {
   }
 }
 
+function tileOverlay(c, d, suffix = '') {
+  const s = sigInfo(c);
+  return `<span class="tlabel">${esc(c.label)}${suffix}</span>` +
+    (d.motions.includes(c.id) ? '<span class="tdot" aria-label="Bewegung"></span>' : '') +
+    (c.door === 'open' ? '<span class="tdoor">Tor offen</span>' : '') +
+    (s ? `<span class="tsig sig ${s.cls}" style="position:absolute;padding:0;background:none">${esc(s.text)}</span>` : '');
+}
+
+function renderGrid(d, want) {
+  // bis vier Kameras volle Qualität, darüber Substream – schont Tablet und WLAN
+  const quality = d.cams.length <= 4 ? 'main' : 'sub';
+  for (const c of d.cams) {
+    const tile = root.querySelector(`[data-open="${CSS.escape(c.id)}"]`);
+    tile.classList.toggle('alert', d.motions.includes(c.id));
+    const slot = tile.querySelector('.slot');
+    if (c.off) {
+      slot.innerHTML = `<div class="offnote">${esc(offWord(c))}</div>`;
+    } else {
+      if (slot.querySelector('.offnote')) slot.innerHTML = '';
+      mount(slot, c.id, quality);
+      want.add(c.id + '|' + quality);
+    }
+    tile.querySelector('.tov').innerHTML = tileOverlay(c, d);
+  }
+}
+
 function renderMonitor(d, want) {
   const big = d.main;
   root.querySelector('#big').classList.toggle('alert', d.motions.includes(big));
@@ -158,12 +200,7 @@ function renderMonitor(d, want) {
       mount(tslot, c.id, 'sub');
       want.add(c.id + '|sub');
     }
-    const s = sigInfo(c);
-    tile.querySelector('.tov').innerHTML =
-      `<span class="tlabel">${esc(c.label)}${c.id === big ? ' · groß' : ''}</span>` +
-      (d.motions.includes(c.id) ? '<span class="tdot" aria-label="Bewegung"></span>' : '') +
-      (c.door === 'open' ? '<span class="tdoor">Tor offen</span>' : '') +
-      (s ? `<span class="tsig sig ${s.cls}" style="position:absolute;padding:0;background:none">${esc(s.text)}</span>` : '');
+    tile.querySelector('.tov').innerHTML = tileOverlay(c, d, c.id === big ? ' · groß' : '');
   }
   const strip = root.querySelector('#strip');
   const n = Math.max(d.cams.length, 3);
@@ -193,7 +230,7 @@ function renderChrome(d) {
       if (s) html += `<span class="sig ${s.cls}">${esc(s.text)}</span>`;
     }
     if (d.rotating) html += `<div class="progress"><span style="width:${pct}%"></span></div>`;
-  } else {
+  } else if (!d.grid) {
     const s = sigInfo(main);
     root.querySelector('#bigov').innerHTML = capHtml(main, d, '') +
       (s ? `<span class="sig ${s.cls}">${esc(s.text)}</span>` : '') +
@@ -219,7 +256,9 @@ function renderChrome(d) {
 }
 
 function menuHtml(d) {
-  const showRows = [`<button type="button" class="opt" data-act="rotate" aria-pressed="${rotateOn && !pin}">Automatisch rotieren<span>${rotateOn && !pin ? '●' : ''}</span></button>`]
+  const auto = rotateOn && !pin && !gridOn;
+  const showRows = [`<button type="button" class="opt" data-act="rotate" aria-pressed="${auto}">Automatisch rotieren<span>${auto ? '●' : ''}</span></button>`,
+    `<button type="button" class="opt" data-act="grid" aria-pressed="${gridOn}">Alle gleich groß<span>${gridOn ? '●' : ''}</span></button>`]
     .concat(d.cams.map((c) => `<button type="button" class="opt" data-pin="${esc(c.id)}" aria-pressed="${pin && pin.cam === c.id}">${esc(c.label)} anheften<span>${pin && pin.cam === c.id ? '●' : ''}</span></button>`));
   const rows = d.cams.map((c) => {
     const s = sigInfo(c);
@@ -238,7 +277,7 @@ function menuHtml(d) {
         <div class="row2"><button type="button" class="opt" data-act="allon">Alle an</button><button type="button" class="opt" data-act="alloff">Alle aus</button></div>
         ${rows.join('')}
         <span class="hint">${offCount ? offCount + ' von ' + d.cams.length + ' aus' : 'Alle nehmen auf und melden Bewegung'}</span></div>
-      <div class="foot">${S.history ? '<a class="opt" href="#details">Details &amp; Verlauf<span aria-hidden="true">›</span></a>' : ''}<button type="button" class="opt" data-act="fullscreen">Vollbild</button></div>
+      <div class="foot"><a class="opt" href="#overview">${S.history ? 'Übersicht &amp; Verlauf' : 'Übersicht'}<span aria-hidden="true">›</span></a><button type="button" class="opt" data-act="fullscreen">Vollbild</button></div>
     </aside>`;
 }
 
@@ -246,16 +285,17 @@ function menuHtml(d) {
 async function post(path, body) {
   try {
     await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  } catch (e) { /* Zustand kommt ohnehin über SSE */ }
+  } catch (e) { /* Zustand kommt ohnehin über den WebSocket */ }
 }
 
 root.addEventListener('click', (e) => {
   if (onDetails()) return;
-  const el = e.target.closest('[data-act],[data-pin],[data-off],[data-tile]');
+  const el = e.target.closest('[data-act],[data-pin],[data-off],[data-tile],[data-open]');
   if (!el || !S) return;
   const pinMs = S.pin_minutes * 60000;
+  if (el.dataset.open) { location.hash = '#cam/' + encodeURIComponent(el.dataset.open); return; }
   if (el.dataset.tile) pin = { cam: el.dataset.tile, until: now() + pinMs };
-  else if (el.dataset.pin) { pin = { cam: el.dataset.pin, until: now() + pinMs }; menuOpen = false; }
+  else if (el.dataset.pin) { gridOn = false; local.set('grid', '0'); pin = { cam: el.dataset.pin, until: now() + pinMs }; menuOpen = false; }
   else if (el.dataset.off) {
     const c = S.cams.find((x) => x.id === el.dataset.off);
     if (c) post(`api/cams/${encodeURIComponent(c.id)}/off`, { off: !c.off });
@@ -264,7 +304,8 @@ root.addEventListener('click', (e) => {
     if (act === 'menu') menuOpen = true;
     else if (act === 'close') menuOpen = false;
     else if (act === 'unpin') { pin = null; rotStart = now(); }
-    else if (act === 'rotate') { rotateOn = true; pin = null; rotStart = now(); menuOpen = false; }
+    else if (act === 'rotate') { rotateOn = true; pin = null; gridOn = false; local.set('grid', '0'); rotStart = now(); menuOpen = false; }
+    else if (act === 'grid') { gridOn = !gridOn; local.set('grid', gridOn ? '1' : '0'); menuOpen = false; }
     else if (act === 'allon') post('api/all/off', { off: false });
     else if (act === 'alloff') post('api/all/off', { off: true });
     else if (act === 'fullscreen') { document.documentElement.requestFullscreen?.(); menuOpen = false; }

@@ -56,6 +56,14 @@ als Cookie gemerkt. Ohne `ui.kiosk_key` ist der LAN-Port gesperrt.
 - **Monitor** (ab 1400 px Breite, oder `?view=monitor`): eine groß, alle
   anderen in einer Leiste. Antippen heftet eine Kamera für `ui.pin_minutes`
   nur auf diesem Bildschirm an.
+- **Alle gleich groß** (⋯ → Anzeige, oder `?view=grid`): Raster ohne
+  Rotation, bis vier Kameras in voller Qualität. Antippen öffnet die Kamera.
+- **Übersicht** (⋯ → Übersicht): alle Kameras gleich groß, darunter Zustand,
+  Tor und Empfang je Kamera sowie der Speicher.
+- **Kamera-Detail** (Kachel in Übersicht oder Raster): großes Livebild,
+  Zeitleiste für heute/gestern/vorgestern, Ereignisse mit Snapshot,
+  Wiedergabe (±10 min um ein Ereignis) und Clip-Download. Verlauf gibt es nur
+  mit `recording: true`.
 - **⋯-Menü**: Anzeige (nur dieser Bildschirm) und Kameras an/aus (für alle).
   Hat eine Kamera `suppress` (Privacy-Schalter in HA), schaltet das Menü
   diesen; sonst pausiert das Add-on die Aufnahme selbst.
