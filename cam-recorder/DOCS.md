@@ -43,10 +43,40 @@ Application Key in B2 auf Bucket und Prefix beschränken, **ohne
 deleteFiles**. Aufbewahrung regelt die Lifecycle-Regel des Buckets.
 `daily_budget_gb` begrenzt den Upload pro Kamera und Tag.
 
-## In Home Assistant
+## Startansicht
 
-- Seitenleiste **Kameras**: go2rtc-Oberfläche mit Livebild jeder Kamera
-  (Links „stream“). Nutzt die eine Verbindung, die go2rtc ohnehin hält.
+Seitenleiste **Kameras** (über HA, mit HA-Login) oder für Wandtablets direkt
+im LAN: `http://<HA-IP>:8580/?key=<ui.kiosk_key>` – der Schlüssel wird danach
+als Cookie gemerkt. Ohne `ui.kiosk_key` ist der LAN-Port gesperrt.
+
+- **Tablet** (schmale Bildschirme, oder `?view=tablet`): eine Kamera im
+  Vollbild, rotiert alle `ui.rotate_seconds`. Bewegung holt die neueste Kamera
+  nach vorn; genau zwei gleichzeitig stehen nebeneinander, ab drei steht die
+  neueste groß und oben „auch: …“. Nutzt den Substream (`rtsp_sub`).
+- **Monitor** (ab 1400 px Breite, oder `?view=monitor`): eine groß, alle
+  anderen in einer Leiste. Antippen heftet eine Kamera für `ui.pin_minutes`
+  nur auf diesem Bildschirm an.
+- **⋯-Menü**: Anzeige (nur dieser Bildschirm) und Kameras an/aus (für alle).
+  Hat eine Kamera `suppress` (Privacy-Schalter in HA), schaltet das Menü
+  diesen; sonst pausiert das Add-on die Aufnahme selbst.
+- Rot heißt Handlungsbedarf: Bewegung, Tor offen (`door_entity`), kein
+  Empfang (`signal_entity` nicht verfügbar). Empfang sonst als leiser Text:
+  grau gut, gelb mittel, orange schwach.
+
+### Fire-Tablet
+
+Fully Kiosk Browser (APK von fully-kiosk.com) → Start-URL wie oben, „Keep
+Screen On“, „Autostart on Boot“. Die Seite lädt pro Kamera nur den Substream
+und schließt Streams, die gerade nicht gebraucht werden.
+
+### Verbindungen zur Kamera
+
+go2rtc hält pro Kamera eine Verbindung zum Hauptstream (Aufnahme) und, wenn
+ein Tablet schaut, eine zum Substream. Tapo-Kameras erlauben höchstens zwei –
+die HA-Kamera-Entity daher auf den Restream des Add-ons umstellen statt
+direkt auf die Kamera.
+
+## In Home Assistant
 
 - `sensor.cam_recorder_<kamera>`: `recording`, `suppressed`, `reconnecting`,
   `degraded` (Ausweichspeicher), Attribute mit Segmentalter, Warteschlange,
@@ -66,7 +96,12 @@ site: mg
 cameras:
   - name: vorzimmer
     rtsp: rtsp://cam:PASSWORT@192.168.1.201:554/stream1
+    rtsp_sub: rtsp://cam:PASSWORT@192.168.1.201:554/stream2
+    label: Vorzimmer
     triggers:
       - binary_sensor.kamera_vorzimmer_motion_alarm
     suppress: switch.kamera_vorzimmer_privacy
+ui:
+  title: Wohnung
+  kiosk_key: ein-langer-zufaelliger-schluessel
 ```
