@@ -49,14 +49,17 @@ Seitenleiste **Kameras** (über HA, mit HA-Login) oder für Wandtablets direkt
 im LAN: `http://<HA-IP>:8580/?key=<ui.kiosk_key>` – der Schlüssel wird danach
 als Cookie gemerkt. Ohne `ui.kiosk_key` ist der LAN-Port gesperrt.
 
-- **Tablet** (schmale Bildschirme, oder `?view=tablet`): eine Kamera im
+Die Ansicht wählt man im ⋯-Menü (pro Bildschirm gemerkt) oder per `?view=`;
+ohne Wahl entscheidet die Breite (ab 1400 px „Groß + klein“).
+
+- **Eine** (Tablet, `?view=tablet`): eine Kamera im
   Vollbild, rotiert alle `ui.rotate_seconds`. Bewegung holt die neueste Kamera
   nach vorn; genau zwei gleichzeitig stehen nebeneinander, ab drei steht die
   neueste groß und oben „auch: …“. Nutzt den Substream (`rtsp_sub`).
-- **Monitor** (ab 1400 px Breite, oder `?view=monitor`): eine groß, alle
+- **Groß + klein** (Monitor, `?view=monitor`): eine groß, alle
   anderen in einer Leiste. Antippen heftet eine Kamera für `ui.pin_minutes`
   nur auf diesem Bildschirm an.
-- **Alle gleich groß** (⋯ → Anzeige, oder `?view=grid`): Raster ohne
+- **Alle gleich** (`?view=grid`): Raster ohne
   Rotation, bis vier Kameras in voller Qualität. Antippen öffnet die Kamera.
 - **Übersicht** (⋯ → Übersicht): alle Kameras gleich groß, darunter Zustand,
   Tor und Empfang je Kamera sowie der Speicher.

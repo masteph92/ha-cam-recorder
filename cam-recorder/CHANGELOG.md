@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.6
+
+- Ansicht im Menü wählbar: „Eine“ (Tablet), „Groß + klein“ (Monitor) oder
+  „Alle gleich“ – pro Bildschirm gemerkt. Bisher kam „Groß + klein“ nur ab
+  1400 px Breite, in HA mit Seitenleiste also nie.
+
 ## 0.3.5
 
 - Menü zeigt an Standorten ohne Aufnahme „Live“ statt „Aufnahme“.

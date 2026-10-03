@@ -22,10 +22,12 @@ const local = {
   get(k) { try { return localStorage.getItem('cam-recorder:' + k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem('cam-recorder:' + k, v); } catch (e) { /* egal */ } },
 };
-let gridOn = local.get('grid') === '1';
+// Ansicht pro Bildschirm: auto (nach Breite), tablet, monitor oder grid
+const LAYOUTS = ['auto', 'tablet', 'monitor', 'grid'];
+let layout = LAYOUTS.includes(local.get('layout')) ? local.get('layout') : (local.get('grid') === '1' ? 'grid' : 'auto');
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const view = () => viewParam || (gridOn ? 'grid' : innerWidth >= 1400 ? 'monitor' : 'tablet');
+const view = () => viewParam || (layout !== 'auto' ? layout : innerWidth >= 1400 ? 'monitor' : 'tablet');
 const now = () => Date.now();
 
 // ---------------------------------------------------------------- Video-Pool
@@ -266,7 +268,6 @@ function renderChrome(d) {
 }
 
 function menuHtml(d) {
-  const auto = !gridOn && !pin;
   const icon = (p) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">${p}</svg>`;
   const pins = d.grid ? '' : `<div class="sec"><span class="cap2">Anheften · nur hier</span><div class="chipsel">${d.cams.map((c) => {
     const on = pin && pin.cam === c.id;
@@ -285,9 +286,11 @@ function menuHtml(d) {
   return `<button type="button" class="backdrop" data-act="close" aria-label="Menü schließen"></button>
     <aside class="panel" aria-label="Menü">
       <div class="head"><h2>${esc(S.title)}</h2><button type="button" class="x" data-act="close" aria-label="Schließen">×</button></div>
-      <div class="seg" role="group" aria-label="Ansicht">
-        <button type="button" data-act="rotate" aria-pressed="${auto}">${icon('<path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4"/>')}Rotieren</button>
-        <button type="button" data-act="${gridOn ? 'rotate' : 'grid'}" aria-pressed="${gridOn}">${icon('<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>')}Alle gleich groß</button>
+      <div class="seg" role="group" aria-label="Ansicht">${[
+        ['tablet', 'Eine', '<rect x="3" y="5" width="18" height="14" rx="2"/>'],
+        ['monitor', 'Groß + klein', '<rect x="3" y="5" width="12" height="14" rx="2"/><rect x="17" y="5" width="4" height="6" rx="1"/><rect x="17" y="13" width="4" height="6" rx="1"/>'],
+        ['grid', 'Alle gleich', '<rect x="3" y="5" width="8" height="6" rx="1.5"/><rect x="13" y="5" width="8" height="6" rx="1.5"/><rect x="3" y="13" width="8" height="6" rx="1.5"/><rect x="13" y="13" width="8" height="6" rx="1.5"/>'],
+      ].map(([v, label, p]) => `<button type="button" data-layout="${v}" aria-pressed="${view() === v}">${icon(p)}${label}</button>`).join('')}
       </div>
       <div class="quick">
         <a class="qbtn" href="#overview">${icon('<path d="M4 6h16M4 12h16M4 18h10"/>')}${S.history ? 'Übersicht &amp; Verlauf' : 'Übersicht'}</a>
@@ -311,12 +314,19 @@ async function post(path, body) {
 
 root.addEventListener('click', (e) => {
   if (onDetails()) return;
-  const el = e.target.closest('[data-act],[data-pin],[data-off],[data-tile],[data-open]');
+  const el = e.target.closest('[data-act],[data-pin],[data-off],[data-tile],[data-open],[data-layout]');
   if (!el || !S) return;
   const pinMs = S.pin_minutes * 60000;
+  if (el.dataset.layout) {
+    layout = el.dataset.layout;
+    local.set('layout', layout);
+    pin = null; rotateOn = true; rotStart = now(); menuOpen = false;
+    render();
+    return;
+  }
   if (el.dataset.open) { location.hash = '#cam/' + encodeURIComponent(el.dataset.open); return; }
   if (el.dataset.tile) pin = { cam: el.dataset.tile, until: now() + pinMs };
-  else if (el.dataset.pin) { gridOn = false; local.set('grid', '0'); pin = { cam: el.dataset.pin, until: now() + pinMs }; menuOpen = false; }
+  else if (el.dataset.pin) { pin = { cam: el.dataset.pin, until: now() + pinMs }; menuOpen = false; }
   else if (el.dataset.off) {
     const c = S.cams.find((x) => x.id === el.dataset.off);
     if (c) post(`api/cams/${encodeURIComponent(c.id)}/off`, { off: !c.off });
@@ -325,8 +335,6 @@ root.addEventListener('click', (e) => {
     if (act === 'menu') menuOpen = true;
     else if (act === 'close') menuOpen = false;
     else if (act === 'unpin') { pin = null; rotStart = now(); }
-    else if (act === 'rotate') { rotateOn = true; pin = null; gridOn = false; local.set('grid', '0'); rotStart = now(); menuOpen = false; }
-    else if (act === 'grid') { gridOn = !gridOn; local.set('grid', gridOn ? '1' : '0'); menuOpen = false; }
     else if (act === 'allon') post('api/all/off', { off: false });
     else if (act === 'alloff') post('api/all/off', { off: true });
     else if (act === 'fullscreen') { document.documentElement.requestFullscreen?.(); menuOpen = false; }
