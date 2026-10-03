@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- Live-Zustand über WebSocket statt Server-Sent Events: der HA-Ingress-Proxy
+  hielt den Event-Stream zurück, die Startansicht blieb in der Seitenleiste
+  schwarz. Fällt der WebSocket aus, fragt die Seite alle 3 s ab.
+- Monitor-Leiste in fester Reihenfolge, die große Kamera ist markiert.
+
 ## 0.2.0
 
 - Eigene Startansicht statt go2rtc-Oberfläche: Tablet (eine Kamera im

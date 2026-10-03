@@ -67,24 +67,29 @@ def make_app(*, snapshot: Callable[[], dict], subscribe, unsubscribe,
     async def state(request: web.Request) -> web.Response:
         return web.json_response(snapshot())
 
-    async def events(request: web.Request) -> web.StreamResponse:
-        resp = web.StreamResponse(headers={
-            "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
-        await resp.prepare(request)
+    async def live(request: web.Request) -> web.StreamResponse:
+        """Live state over WebSocket. SSE does not work behind HA ingress:
+        the proxy holds the event-stream body back."""
+        ws = web.WebSocketResponse(heartbeat=25)
+        await ws.prepare(request)
         q = subscribe()
         try:
-            await resp.write(f"data: {json.dumps(snapshot())}\n\n".encode())
-            while True:
-                try:
-                    await asyncio.wait_for(q.get(), 25)
-                    await resp.write(f"data: {json.dumps(snapshot())}\n\n".encode())
-                except asyncio.TimeoutError:
-                    await resp.write(b": keepalive\n\n")
+            await ws.send_str(json.dumps(snapshot()))
+            while not ws.closed:
+                getter = asyncio.create_task(q.get())
+                closer = asyncio.create_task(ws.receive())
+                done, pending = await asyncio.wait({getter, closer}, return_when=asyncio.FIRST_COMPLETED)
+                for t in pending:
+                    t.cancel()
+                if closer in done:
+                    break  # client closed or sent something we ignore
+                await ws.send_str(json.dumps(snapshot()))
         except (ConnectionResetError, asyncio.CancelledError):
             pass
         finally:
             unsubscribe(q)
-        return resp
+            await ws.close()
+        return ws
 
     async def cam_off(request: web.Request) -> web.Response:
         body = await request.json()
@@ -131,7 +136,7 @@ def make_app(*, snapshot: Callable[[], dict], subscribe, unsubscribe,
     app = web.Application(middlewares=[auth])
     app.router.add_get("/", index)
     app.router.add_get("/api/state", state)
-    app.router.add_get("/api/events", events)
+    app.router.add_get("/api/live", live)
     app.router.add_post("/api/cams/{cam}/off", cam_off)
     app.router.add_post("/api/all/off", all_off)
     app.router.add_get("/go2rtc/api/ws", go2rtc_ws)

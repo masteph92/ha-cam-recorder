@@ -294,9 +294,28 @@ setInterval(() => {
   render();
 }, 1000);
 
+// Live-Zustand über WebSocket (SSE kommt durch den HA-Ingress-Proxy nicht durch).
+// Fällt er aus, fragt die Seite bis zur Wiederverbindung regelmäßig ab.
+let ws = null;
+let backoff = 1000;
 function connect() {
-  const es = new EventSource('api/events');
-  es.onmessage = (e) => { S = JSON.parse(e.data); connected = true; render(); };
-  es.onerror = () => { connected = false; render(); };
+  const u = new URL('api/live', document.baseURI);
+  u.protocol = u.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(u.href);
+  ws.onmessage = (e) => { S = JSON.parse(e.data); connected = true; backoff = 1000; render(); };
+  ws.onclose = () => {
+    connected = false; ws = null; render();
+    setTimeout(connect, backoff);
+    backoff = Math.min(backoff * 2, 30000);
+  };
 }
+async function poll() {
+  if (connected) return;
+  try {
+    const r = await fetch('api/state', { cache: 'no-store' });
+    if (r.ok) { S = await r.json(); render(); }
+  } catch (e) { /* weiter versuchen */ }
+}
+setInterval(poll, 3000);
+poll();
 connect();

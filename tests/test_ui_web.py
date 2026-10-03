@@ -115,3 +115,25 @@ def test_ingress_peer_is_trusted(monkeypatch):
             assert r.status == 200 and "static/app.js" in await r.text()
             assert (await c.get("/static/app.js")).status == 200
     run(go())
+
+
+def test_live_websocket_pushes_snapshot_and_changes(monkeypatch):
+    monkeypatch.setattr(web, "is_ingress", lambda request: True)
+    ui = UiState(parse(RAW))
+
+    async def noop(*a):
+        return True
+
+    app = web.make_app(snapshot=lambda: ui.snapshot(0), subscribe=ui.subscribe, unsubscribe=ui.unsubscribe,
+                       set_off=noop, set_all_off=noop, stream_names=set(), kiosk_key="")
+
+    async def go():
+        async with TestClient(TestServer(app)) as c:
+            ws = await c.ws_connect("/api/live")
+            first = await ws.receive_json(timeout=2)
+            assert first["cams"][1]["motion_since"] is None
+            ui.motion("g65", 42.0)
+            second = await ws.receive_json(timeout=2)
+            assert second["cams"][1]["motion_since"] == 42.0
+            await ws.close()
+    run(go())
