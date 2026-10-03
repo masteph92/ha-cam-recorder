@@ -12,12 +12,13 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from . import cleaner, go2rtc, snapshot, storage
+from . import cleaner, go2rtc, snapshot, storage, web
 from .config import Camera, Config
 from .events import Closed, Event, EventTracker, Opened
 from .recorder import Recorder
 from .segments import Segment, window
 from .state import StateDB, utc_day
+from .ui import UiState
 from .uploader import Uploader, remote_dst
 
 log = logging.getLogger(__name__)
@@ -44,6 +45,10 @@ class App:
                 self.routes.setdefault(t, []).append((c.name, "trigger"))
             if c.suppress:
                 self.routes.setdefault(c.suppress, []).append((c.name, "suppress"))
+            if c.door_entity:
+                self.routes.setdefault(c.door_entity, []).append((c.name, "door"))
+            if c.signal_entity:
+                self.routes.setdefault(c.signal_entity, []).append((c.name, "signal"))
         self.recorders: dict[str, Recorder] = {}
         self.cam_state: dict[str, str] = {c.name: "starting" for c in cfg.cameras}
         self.over_budget: set[str] = set()
@@ -53,6 +58,8 @@ class App:
         self.uploader: Uploader | None = None
         # event.json waits until the segment containing the end is finished
         self.meta_due: list[tuple[float, Event]] = []
+        self.ui = UiState(cfg)
+        self.ha = None
 
     # ------------------------------------------------------------ HA input
     def on_ha_state(self, entity: str, state: str) -> None:
@@ -62,11 +69,16 @@ class App:
             tr = self.trackers[cam]
             if kind == "trigger":
                 self._apply(tr.trigger(entity, on, t))
-            else:
+            elif kind == "suppress":
                 self._apply(tr.suppress(on, t))
+                self.ui.privacy(cam, on)
                 rec = self.recorders.get(cam)
                 if rec:
                     rec.set_suppressed(on)
+            elif kind == "door":
+                self.ui.door(cam, state)
+            elif kind == "signal":
+                self.ui.signal(cam, state)
 
     def tick(self) -> None:
         t = self.clock()
@@ -88,10 +100,12 @@ class App:
                 t0, _ = window(ev.start, None, self.cfg.pre_seconds)
                 for seg in self.db.segments_overlapping(ev.cam, t0, None):
                     self._enqueue_segment(ev, seg)
+                self.ui.motion(ev.cam, ev.start)
                 self.on_opened(ev)
                 self.notify("cam_recorder_event_start", {"camera": ev.cam, "event_id": ev.id, "start": ev.start})
             elif isinstance(a, Closed):
                 log.info("%s: event %s closed (%s, %.0fs)", ev.cam, ev.id, ev.reason, ev.end - ev.start)
+                self.ui.motion(ev.cam, None)
                 self.meta_due.append((ev.end + 2 * self.cfg.segment_seconds, ev))
                 self.notify("cam_recorder_event_end", {
                     "camera": ev.cam, "event_id": ev.id, "start": ev.start, "end": ev.end, "reason": ev.reason})
@@ -109,6 +123,38 @@ class App:
             return None
         cam, start, end, eid, reason = r
         return Event(cam=cam, start=start, end=end if end is not None else start, id=eid, reason=reason)
+
+    # ------------------------------------------------------------ on / off
+    def pause(self, cam: str, on: bool) -> None:
+        """Add-on internal pause for cameras without a privacy entity in HA:
+        no recording, no events. Survives restarts."""
+        if cam not in self.cams:
+            return
+        self._apply(self.trackers[cam].suppress(on, self.clock()))
+        rec = self.recorders.get(cam)
+        if rec:
+            rec.set_suppressed(on)
+        self.db.set_setting(f"paused:{cam}", "1" if on else "0")
+        self.ui.pause(cam, on)
+
+    async def set_off(self, cam: str, off: bool) -> bool:
+        c = self.cams.get(cam)
+        if c is None:
+            return False
+        if c.suppress:
+            # privacy switch in HA; its new state comes back over the websocket
+            return bool(self.ha) and await self.ha.call_service(c.suppress, off)
+        self.pause(cam, off)
+        return True
+
+    async def set_all_off(self, off: bool) -> None:
+        for cam in self.cams:
+            await self.set_off(cam, off)
+
+    def restore_pauses(self) -> None:
+        for cam, c in self.cams.items():
+            if not c.suppress and self.db.get_setting(f"paused:{cam}") == "1":
+                self.pause(cam, True)
 
     # ------------------------------------------------------------ upload queue
     def _dst(self, ev: Event, name: str) -> str:
@@ -219,6 +265,7 @@ class App:
         ha = None
         if os.environ.get("SUPERVISOR_TOKEN"):
             ha = HAClient(self.routes.keys(), lambda e, s: loop.call_soon(self.on_ha_state, e, s))
+            self.ha = ha
             self.notify = lambda kind, data: loop.create_task(ha.fire(kind, data))
         else:
             # Recording must not depend on HA; without it there are just no events.
@@ -235,8 +282,17 @@ class App:
                 c.name, go2rtc.local_url(c.name), self.cfg.segment_seconds, self.cfg.audio,
                 on_segment=self.on_segment, on_state=self._set_cam_state)
         self.check_storage()
+        self.restore_pauses()
+        if not self.cfg.kiosk_key:
+            log.info("no ui.kiosk_key: LAN port locked, UI only via HA sidebar")
+        ui_app = web.make_app(
+            snapshot=lambda: self.ui.snapshot(self.clock()),
+            subscribe=self.ui.subscribe, unsubscribe=self.ui.unsubscribe,
+            set_off=self.set_off, set_all_off=self.set_all_off,
+            stream_names=go2rtc.stream_names(self.cfg), kiosk_key=self.cfg.kiosk_key)
 
         tasks = [
+            web.serve(ui_app),
             go2rtc.run(self.cfg),
             *([ha.run()] if ha else []),
             self.uploader.run(),
@@ -250,6 +306,7 @@ class App:
 
     def _set_cam_state(self, cam: str, state: str) -> None:
         self.cam_state[cam] = state
+        self.ui.recording(cam, state)
 
     async def _publish_health(self, ha) -> None:
         for cam, h in self.health().items():

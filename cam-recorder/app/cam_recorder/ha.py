@@ -84,6 +84,23 @@ class HAClient:
         except Exception as e:  # noqa: BLE001
             log.warning("fire_event %s: %s", event_type, e)
 
+    async def call_service(self, entity_id: str, on: bool) -> bool:
+        """turn_on / turn_off for switch, input_boolean, light ..."""
+        if not self.session:
+            return False
+        domain = entity_id.split(".", 1)[0]
+        service = "turn_on" if on else "turn_off"
+        try:
+            async with self.session.post(f"{API_URL}/services/{domain}/{service}",
+                                         json={"entity_id": entity_id}) as r:
+                if r.status >= 300:
+                    log.warning("%s.%s %s: HTTP %s", domain, service, entity_id, r.status)
+                    return False
+                return True
+        except Exception as e:  # noqa: BLE001
+            log.warning("%s.%s %s: %s", domain, service, entity_id, e)
+            return False
+
     async def set_sensor(self, entity_id: str, state: str, attributes: dict) -> None:
         if not self.session:
             return

@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS queue (
   attempts INTEGER NOT NULL DEFAULT 0, next_try REAL NOT NULL DEFAULT 0,
   done INTEGER NOT NULL DEFAULT 0, error TEXT,
   UNIQUE(event_id, src));
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS budget (
   cam TEXT NOT NULL, day TEXT NOT NULL, bytes INTEGER NOT NULL, PRIMARY KEY(cam, day));
 """
@@ -164,6 +165,14 @@ class StateDB:
         self.db.execute(
             "INSERT INTO budget VALUES (?,?,?) ON CONFLICT(cam, day) DO UPDATE SET bytes=bytes+excluded.bytes",
             (cam, utc_day(t), size))
+
+    # --- settings (e.g. internal pause per camera)
+    def get_setting(self, key: str, default: str | None = None) -> str | None:
+        r = self.db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        return r[0] if r else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        self.db.execute("INSERT OR REPLACE INTO settings VALUES (?,?)", (key, value))
 
     def close(self) -> None:
         self.db.close()

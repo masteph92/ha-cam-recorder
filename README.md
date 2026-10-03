@@ -12,7 +12,7 @@ Einstellungen → Add-ons → Add-on-Store → ⋮ → Repositories →
 ## Entwicklung
 
 ```sh
-uv run --no-project --with pytest python -m pytest
+uv run --no-project --with pytest --with aiohttp python -m pytest
 ```
 
 Die Logik (Ereignisfenster, Aufräumen, Warteschlange, Speicherwahl) ist ohne

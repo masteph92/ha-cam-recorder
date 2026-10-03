@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0
+
+- Eigene Startansicht statt go2rtc-Oberfläche: Tablet (eine Kamera im
+  Vollbild, rotierend, neueste Bewegung vorn, zwei gleichzeitig nebeneinander)
+  und Monitor (eine groß, Rest in einer Leiste, lokal anheften).
+- Live-Zustand per Server-Sent Events; Kameras an/aus (Privacy-Schalter in HA
+  oder interne Pause, bleibt über Neustarts).
+- LAN-Port 8580 für Wandtablets ohne HA-Login, nur mit `ui.kiosk_key`.
+- Pro Kamera optional `rtsp_sub` (Substream fürs Tablet), `door_entity`,
+  `signal_entity`, `label`, `wired`.
+- go2rtc-API nur noch auf localhost; die Oberfläche reicht ausschließlich den
+  Videostream durch.
+
 ## 0.1.3
 
 - create_marker erkennt HA-Netzwerkspeicher: systemd-Automount (autofs) wird

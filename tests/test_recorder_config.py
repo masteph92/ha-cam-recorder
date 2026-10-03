@@ -91,7 +91,8 @@ def test_redact_hides_credentials():
 
 def test_go2rtc_single_source_per_camera():
     conf = render_config(parse(RAW))
-    assert conf["streams"] == {"vorzimmer": ["rtsp://cam:x@192.168.1.201:554/stream1"]}
+    assert conf["streams"]["vorzimmer"] == ["rtsp://cam:x@192.168.1.201:554/stream1"]
+    assert conf["streams"]["vorzimmer_sub"] == ["rtsp://127.0.0.1:8554/vorzimmer"]
     json.dumps(conf)
 
 

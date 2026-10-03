@@ -20,13 +20,28 @@ RTSP_PORT = 8554
 API_PORT = 1984
 
 
+SUB_SUFFIX = "_sub"
+
+
+def stream_names(cfg: Config) -> set[str]:
+    return {c.name for c in cfg.cameras} | {c.name + SUB_SUFFIX for c in cfg.cameras}
+
+
 def render_config(cfg: Config) -> dict:
+    streams: dict[str, list[str]] = {}
+    for c in cfg.cameras:
+        streams[c.name] = [c.rtsp]
+        # without a substream the tablet name loops back to go2rtc's own
+        # restream of the main stream - no second session to the camera
+        streams[c.name + SUB_SUFFIX] = [c.rtsp_sub] if c.rtsp_sub else [local_url(c.name)]
     return {
-        "api": {"listen": f":{API_PORT}"},
+        # API only on localhost: the add-on's web server proxies the few
+        # paths the UI needs and nothing else (go2rtc's config editor stays shut)
+        "api": {"listen": f"127.0.0.1:{API_PORT}"},
         "rtsp": {"listen": f":{RTSP_PORT}"},
         "webrtc": {"listen": ""},
         "log": {"level": "info", "format": "text"},
-        "streams": {c.name: [c.rtsp] for c in cfg.cameras},
+        "streams": streams,
     }
 
 

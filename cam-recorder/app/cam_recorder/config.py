@@ -23,6 +23,11 @@ class Camera:
     triggers: tuple[str, ...]
     suppress: str | None = None
     snapshot_url: str | None = None
+    label: str | None = None
+    rtsp_sub: str | None = None  # substream for tablets; recording always uses rtsp
+    door_entity: str | None = None
+    signal_entity: str | None = None
+    wired: bool = False
 
 
 @dataclass(frozen=True)
@@ -46,6 +51,10 @@ class Config:
     b2_account: str = ""
     b2_key: str = field(default="", repr=False)
     daily_budget_gb: float = 5
+    title: str = ""
+    kiosk_key: str = field(default="", repr=False)
+    ui_rotate_seconds: int = 12
+    ui_pin_minutes: int = 5
 
     @property
     def primary_max_bytes(self) -> int:
@@ -80,13 +89,21 @@ def parse(raw: dict) -> Config:
             triggers=triggers,
             suppress=c.get("suppress") or None,
             snapshot_url=c.get("snapshot_url") or None,
+            label=c.get("label") or None,
+            rtsp_sub=c.get("rtsp_sub") or None,
+            door_entity=c.get("door_entity") or None,
+            signal_entity=c.get("signal_entity") or None,
+            wired=bool(c.get("wired", False)),
         ))
+        if cams[-1].rtsp_sub and not str(cams[-1].rtsp_sub).startswith(SOURCE_PREFIXES):
+            raise ConfigError(f"camera {name}: rtsp_sub must start with one of {', '.join(SOURCE_PREFIXES)}")
     if len({c.name for c in cams}) != len(cams):
         raise ConfigError("camera names must be unique")
 
     ev = raw.get("event") or {}
     st = raw.get("storage") or {}
     up = raw.get("upload") or {}
+    ui = raw.get("ui") or {}
     cfg = Config(
         site=site,
         cameras=tuple(cams),
@@ -105,7 +122,13 @@ def parse(raw: dict) -> Config:
         b2_account=str(_opt(up, "b2_account", "")),
         b2_key=str(_opt(up, "b2_key", "")),
         daily_budget_gb=float(_opt(up, "daily_budget_gb", 5)),
+        title=str(_opt(ui, "title", "")),
+        kiosk_key=str(_opt(ui, "kiosk_key", "")),
+        ui_rotate_seconds=int(_opt(ui, "rotate_seconds", 12)),
+        ui_pin_minutes=int(_opt(ui, "pin_minutes", 5)),
     )
+    if cfg.kiosk_key and len(cfg.kiosk_key) < 12:
+        raise ConfigError("ui.kiosk_key: at least 12 characters (it is the only lock on the LAN port)")
     if cfg.upload_enabled and not (cfg.remote and cfg.b2_account and cfg.b2_key):
         raise ConfigError("upload enabled but remote/b2_account/b2_key missing")
     if cfg.max_seconds <= cfg.post_seconds:
