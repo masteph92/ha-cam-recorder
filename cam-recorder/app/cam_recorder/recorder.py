@@ -21,6 +21,7 @@ log = logging.getLogger(__name__)
 BACKOFF_START = 2.0
 BACKOFF_MAX = 60.0
 POLL = 2.0
+STARTUP_DELAY = 3.0
 LIST_PREFIX = "segments-"
 
 
@@ -131,6 +132,7 @@ class Recorder:
 
     async def run(self) -> None:
         backoff = BACKOFF_START
+        await asyncio.sleep(STARTUP_DELAY)  # go2rtc needs a moment to listen
         while True:
             self._wake.clear()
             if self.suppressed or self.root is None:

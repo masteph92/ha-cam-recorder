@@ -43,6 +43,9 @@ deleteFiles**. Aufbewahrung regelt die Lifecycle-Regel des Buckets.
 
 ## In Home Assistant
 
+- Seitenleiste **Kameras**: go2rtc-Oberfläche mit Livebild jeder Kamera
+  (Links „stream“). Nutzt die eine Verbindung, die go2rtc ohnehin hält.
+
 - `sensor.cam_recorder_<kamera>`: `recording`, `suppressed`, `reconnecting`,
   `degraded` (Ausweichspeicher), Attribute mit Segmentalter, Warteschlange,
   Upload heute.
