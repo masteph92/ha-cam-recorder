@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2
+
+- Oberfläche wird nach einem Update sofort neu geladen: `/static/` mit
+  `Cache-Control: no-cache`, vorher hielt der Browser die alte `app.js`.
+
 ## 0.3.1
 
 - Menülink „Übersicht“ in Textfarbe statt Browser-Blau.

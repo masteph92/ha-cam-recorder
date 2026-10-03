@@ -235,6 +235,14 @@ def make_app(*, snapshot: Callable[[], dict], subscribe, unsubscribe,
     app.router.add_get("/go2rtc/api/ws", go2rtc_ws)
     app.router.add_get("/go2rtc/{name}", go2rtc_file)
     app.router.add_static("/static/", STATIC, show_index=False)
+
+    async def revalidate_static(request: web.Request, resp: web.StreamResponse) -> None:
+        # Without a header browsers cache app.js heuristically and keep showing
+        # the old UI after an add-on update. no-cache still allows a 304.
+        if request.path.startswith("/static/") and "Cache-Control" not in resp.headers:
+            resp.headers["Cache-Control"] = "no-cache"
+
+    app.on_response_prepare.append(revalidate_static)
     return app
 
 
