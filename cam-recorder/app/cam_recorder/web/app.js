@@ -207,8 +207,32 @@ function renderMonitor(d, want) {
     tile.querySelector('.tov').innerHTML = tileOverlay(c, d, c.id === big ? ' · groß' : '');
   }
   const strip = root.querySelector('#strip');
-  const n = Math.max(d.cams.length, 3);
-  strip.style.gridTemplateRows = `repeat(${n}, minmax(0, 1fr))`;
+  const mon = root.querySelector('.monitor');
+  const n = d.cams.length;
+  const L = monitorLayout(n);
+  mon.classList.toggle('bottom', L.bottom);
+  if (L.bottom) {
+    mon.style.gridTemplateRows = `minmax(0, 1fr) ${L.t}px`;
+    strip.style.gridTemplateRows = '';
+    strip.style.gridTemplateColumns = `repeat(${n}, ${Math.floor(L.t * 16 / 9)}px)`;
+  } else {
+    mon.style.gridTemplateRows = '';
+    strip.style.gridTemplateColumns = '';
+    strip.style.gridTemplateRows = `repeat(${Math.max(n, 3)}, minmax(0, 1fr))`;
+  }
+}
+
+// Leiste rechts oder unten – je nachdem, wo das große 16:9-Bild größer wird.
+// Schmale Fenster (HA mit Seitenleiste, Laptop) haben oben/unten Platz übrig,
+// breite Monitore an der Seite.
+function monitorLayout(n) {
+  const W = root.clientWidth, H = root.clientHeight, pad = 10, gap = 8;
+  const area = (w, h) => Math.min(w, h * 16 / 9) * Math.min(h, w * 9 / 16);
+  const side = Math.min(Math.max(220, W * 0.19), 320);
+  const right = area(W - side - 3 * pad, H - 2 * pad);
+  const t = Math.floor(Math.min((W - 2 * pad - gap * (n - 1)) / n * 9 / 16, H * 0.24));
+  const bottom = area(W - 2 * pad, H - t - 3 * pad);
+  return { bottom: bottom > right * 1.04, t };
 }
 
 function capHtml(c, d, pos) {

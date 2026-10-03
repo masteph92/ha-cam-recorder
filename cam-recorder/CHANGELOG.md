@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.7
+
+- „Groß + klein“ legt die Leiste unten oder rechts an, je nachdem wo das
+  große Bild mehr Platz bekommt (schmale Fenster unten, breite rechts).
+
 ## 0.3.6
 
 - Ansicht im Menü wählbar: „Eine“ (Tablet), „Groß + klein“ (Monitor) oder
