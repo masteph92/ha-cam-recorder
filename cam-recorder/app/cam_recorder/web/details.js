@@ -202,7 +202,7 @@ async function loadHls() {
   if (window.Hls) return window.Hls;
   await new Promise((ok, fail) => {
     const s = document.createElement('script');
-    s.src = 'static/hls.min.js';
+    s.src = 'ui/hls.min.js';
     s.onload = ok; s.onerror = fail;
     document.head.appendChild(s);
   });

@@ -112,8 +112,8 @@ def test_ingress_peer_is_trusted(monkeypatch):
         async with TestClient(TestServer(app)) as c:
             assert (await c.get("/api/state")).status == 200
             r = await c.get("/")
-            assert r.status == 200 and "static/app.js" in await r.text()
-            r = await c.get("/static/app.js")
+            assert r.status == 200 and "ui/app.js" in await r.text()
+            r = await c.get("/ui/app.js")
             assert r.status == 200 and r.headers["Cache-Control"] == "no-cache"
     run(go())
 

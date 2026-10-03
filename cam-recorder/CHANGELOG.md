@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3
+
+- Oberfläche unter `ui/` statt `static/`: der Service Worker von Home
+  Assistant cached jede URL mit `/static/` dauerhaft, über HTTPS blieb so
+  nach einem Update die alte Oberfläche stehen.
+
 ## 0.3.2
 
 - Oberfläche wird nach einem Update sofort neu geladen: `/static/` mit
