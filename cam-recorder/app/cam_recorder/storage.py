@@ -21,7 +21,9 @@ NETWORK_FS = {"cifs", "smb3", "smbfs", "nfs", "nfs4"}
 
 def mount_fstype(path: str | Path, mounts: str | None = None) -> str | None:
     """Filesystem type of the mount that contains path (longest mount-point
-    prefix in /proc/mounts)."""
+    prefix in /proc/mounts). Stacked mounts on the same point - systemd
+    automount lists autofs first, the real cifs mount after it - resolve to
+    the last entry."""
     if mounts is None:
         try:
             mounts = Path("/proc/mounts").read_text()
@@ -34,7 +36,7 @@ def mount_fstype(path: str | Path, mounts: str | None = None) -> str | None:
         if len(parts) < 3:
             continue
         mp = parts[1].replace("\\040", " ")
-        if (p == mp or p.startswith(mp.rstrip("/") + "/")) and len(mp) > len(best):
+        if (p == mp or p.startswith(mp.rstrip("/") + "/")) and len(mp) >= len(best):
             best, fstype = mp, parts[2]
     return fstype
 
@@ -42,6 +44,11 @@ def mount_fstype(path: str | Path, mounts: str | None = None) -> str | None:
 def ensure_marker(root: str | Path, mounts: str | None = None) -> bool:
     """Create the marker, but only on a network mount - never on the HA disk."""
     p = Path(root)
+    if mounts is None:
+        try:
+            os.listdir(p)  # triggers a systemd automount before we look
+        except OSError:
+            pass
     if (p / MARKER).is_file():
         return True
     fstype = mount_fstype(p, mounts)

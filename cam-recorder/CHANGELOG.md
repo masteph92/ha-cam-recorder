@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- create_marker erkennt HA-Netzwerkspeicher: systemd-Automount (autofs) wird
+  vor der Prüfung ausgelöst, gestapelte Mounts zählen mit dem letzten Eintrag.
+
 ## 0.1.2
 
 - `storage.create_marker`: legt `.cam-recorder-root` selbst an, aber nur wenn

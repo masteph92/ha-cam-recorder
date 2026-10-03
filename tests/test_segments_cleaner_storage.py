@@ -85,3 +85,11 @@ def test_ensure_marker_on_network_mount(tmp_path):
     mounts = f"//nas/x {tmp_path} cifs rw 0 0\n"
     assert storage.ensure_marker(tmp_path, mounts) is True
     assert (tmp_path / storage.MARKER).is_file()
+
+
+def test_stacked_automount_resolves_to_cifs():
+    mounts = ("/dev/sda8 /share ext4 rw 0 0\n"
+              "systemd-1 /share/cam autofs rw 0 0\n"
+              "//192.168.1.20/cam-recorder /share/cam cifs rw 0 0\n")
+    assert storage.mount_fstype("/share/cam", mounts) == "cifs"
+    assert storage.mount_fstype("/share/cam", mounts.rsplit("//", 1)[0]) == "autofs"
