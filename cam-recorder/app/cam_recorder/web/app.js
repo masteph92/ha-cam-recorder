@@ -159,7 +159,8 @@ function renderMonitor(d, want) {
       want.add(c.id + '|main');
     }
     const tile = root.querySelector(`[data-tile="${CSS.escape(c.id)}"]`);
-    tile.hidden = c.id === big;
+    // feste Reihenfolge: Kacheln wandern bei der Rotation nicht, der Tipp trifft immer
+    tile.classList.toggle('current', c.id === big);
     tile.classList.toggle('alert', d.motions.includes(c.id));
     const tslot = tile.querySelector('.slot');
     if (c.off) {
@@ -171,13 +172,13 @@ function renderMonitor(d, want) {
     }
     const s = sigInfo(c);
     tile.querySelector('.tov').innerHTML =
-      `<span class="tlabel">${esc(c.label)}</span>` +
+      `<span class="tlabel">${esc(c.label)}${c.id === big ? ' · groß' : ''}</span>` +
       (d.motions.includes(c.id) ? '<span class="tdot" aria-label="Bewegung"></span>' : '') +
       (c.door === 'open' ? '<span class="tdoor">Tor offen</span>' : '') +
       (s ? `<span class="tsig sig ${s.cls}" style="position:absolute;padding:0;background:none">${esc(s.text)}</span>` : '');
   }
   const strip = root.querySelector('#strip');
-  const n = Math.max(d.cams.length - 1, 3);
+  const n = Math.max(d.cams.length, 3);
   strip.style.gridTemplateRows = `repeat(${n}, minmax(0, 1fr))`;
 }
 
