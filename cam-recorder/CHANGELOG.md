@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.5
+
+- Menü zeigt an Standorten ohne Aufnahme „Live“ statt „Aufnahme“.
+
 ## 0.3.4
 
 - Menü neu geordnet: oben Ansicht (Rotieren / Alle gleich groß), Übersicht

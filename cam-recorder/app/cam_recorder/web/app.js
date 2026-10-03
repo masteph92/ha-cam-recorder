@@ -275,7 +275,7 @@ function menuHtml(d) {
   const rows = d.cams.map((c) => {
     const s = sigInfo(c);
     const door = c.door === 'open' && !c.off;
-    const info = c.off ? (c.off_reason === 'privacy' ? 'Privat · aus' : 'Pausiert') : door ? 'Tor offen' : d.motions.includes(c.id) ? 'Bewegung' : 'Aufnahme';
+    const info = c.off ? (c.off_reason === 'privacy' ? 'Privat · aus' : 'Pausiert') : door ? 'Tor offen' : d.motions.includes(c.id) ? 'Bewegung' : S.history ? 'Aufnahme' : 'Live';
     const sig = c.wired ? 'Kabel' : (s ? esc(s.text) : '');
     return `<div class="camrow${c.off ? ' is-off' : ''}"><span class="cname"><span>${esc(c.label)}</span>` +
       `<span class="info${door || d.motions.includes(c.id) ? ' alert' : ''}">${info}${sig ? ` · <span class="sig ${s && !c.wired ? s.cls : 'good'}">${sig}</span>` : ''}</span></span>` +
@@ -297,7 +297,7 @@ function menuHtml(d) {
       <div class="sec">
         <div class="sechead"><span class="cap2">Kameras</span><span><button type="button" class="textbtn" data-act="allon">Alle an</button><button type="button" class="textbtn" data-act="alloff">Alle aus</button></span></div>
         <div class="camlist">${rows.join('')}</div>
-        <span class="hint">${offCount ? offCount + ' von ' + d.cams.length + ' aus' : 'Alle nehmen auf und melden Bewegung'}</span>
+        <span class="hint">${offCount ? offCount + ' von ' + d.cams.length + ' aus' : (S.history ? 'Alle nehmen auf und melden Bewegung' : 'Alle an · nur Livebild, keine Aufnahme')}</span>
       </div>
     </aside>`;
 }
