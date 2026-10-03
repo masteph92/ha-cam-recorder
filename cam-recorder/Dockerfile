@@ -12,14 +12,14 @@ RUN case "${BUILD_ARCH}" in \
       aarch64) arch=arm64 ;; \
       *) echo "unsupported arch ${BUILD_ARCH}" >&2; exit 1 ;; \
     esac \
- && curl -fsSL -o /usr/local/bin/go2rtc \
+ && curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o /usr/local/bin/go2rtc \
       "https://github.com/AlexxIT/go2rtc/releases/download/v${GO2RTC_VERSION}/go2rtc_linux_${arch}" \
  && chmod +x /usr/local/bin/go2rtc \
  && go2rtc -version
 
 COPY app /app
 # hls.js für die Wiedergabe in Chrome/Fire-Tablet, lokal statt CDN
-RUN curl -fsSL -o /app/cam_recorder/web/hls.min.js \
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o /app/cam_recorder/web/hls.min.js \
       "https://cdn.jsdelivr.net/npm/hls.js@${HLSJS_VERSION}/dist/hls.min.js"
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1
