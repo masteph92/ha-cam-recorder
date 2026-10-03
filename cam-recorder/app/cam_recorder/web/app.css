@@ -92,7 +92,7 @@ button { font: inherit; color: inherit; }
 .panel .x { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--control); cursor: pointer; font-size: 20px; }
 .sec { display: flex; flex-direction: column; gap: 8px; }
 .sec > .cap2 { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.opt { display: flex; align-items: center; justify-content: space-between; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--control); cursor: pointer; font-size: 14px; text-align: left; }
+.opt { display: flex; align-items: center; justify-content: space-between; color: var(--text); text-decoration: none; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--control); cursor: pointer; font-size: 14px; text-align: left; }
 .opt[aria-pressed="true"] { background: var(--sel); border-color: var(--sel-border); }
 .row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .camrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; min-height: 50px; border-bottom: 1px solid var(--line); }

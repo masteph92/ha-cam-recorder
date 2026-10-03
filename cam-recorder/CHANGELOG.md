@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- Menülink „Übersicht“ in Textfarbe statt Browser-Blau.
+
 ## 0.3.0
 
 - Übersicht (⋯ → Übersicht): alle Kameras gleich groß, darunter Zustand,
