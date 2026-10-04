@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.8
+
+- Angeheftete Kamera bleibt, bis man sie löst (auch nach Neuladen, pro
+  Bildschirm); erneutes Antippen der Kachel löst sie. `ui.pin_minutes` ist
+  ohne Wirkung.
+
 ## 0.3.7
 
 - „Groß + klein“ legt die Leiste unten oder rechts an, je nachdem wo das

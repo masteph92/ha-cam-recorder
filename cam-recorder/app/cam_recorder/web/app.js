@@ -11,7 +11,7 @@ let S = null;              // letzter Stand vom Server
 let connected = false;
 let rotIdx = 0;
 let rotStart = Date.now();
-let pin = null;            // { cam, until } – nur auf diesem Bildschirm
+let pin = null;            // { cam } – nur auf diesem Bildschirm, bleibt bis zum Lösen
 let menuOpen = false;
 let rotateOn = true;
 let built = '';            // Signatur des aufgebauten Gerüsts
@@ -27,6 +27,13 @@ const LAYOUTS = ['auto', 'tablet', 'monitor', 'grid'];
 let layout = LAYOUTS.includes(local.get('layout')) ? local.get('layout') : (local.get('grid') === '1' ? 'grid' : 'auto');
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function setPin(cam) {
+  pin = cam ? { cam } : null;
+  local.set('pin', cam || '');
+  rotStart = now();
+}
+if (local.get('pin')) pin = { cam: local.get('pin') };
+
 const view = () => viewParam || (layout !== 'auto' ? layout : innerWidth >= 1400 ? 'monitor' : 'tablet');
 const now = () => Date.now();
 
@@ -56,7 +63,7 @@ function mount(slot, cam, quality) {
 function derive() {
   const cams = S.cams;
   const byId = Object.fromEntries(cams.map((c) => [c.id, c]));
-  if (pin && (pin.until <= now() || !byId[pin.cam])) pin = null;
+  if (pin && !byId[pin.cam]) setPin(null);
   const motions = cams.filter((c) => c.motion_since).sort((a, b) => a.motion_since - b.motion_since).map((c) => c.id);
   const newest = motions.length ? motions[motions.length - 1] : null;
   const rotList = cams.filter((c) => !c.off).map((c) => c.id);
@@ -65,12 +72,12 @@ function derive() {
   const nextCam = ring[(rotIdx + 1) % ring.length];
   const tablet = view() === 'tablet';
   const grid = view() === 'grid';
-  if (grid) pin = null;
-  const split = tablet && !pin && motions.length === 2;
-  const main = pin ? pin.cam : (newest || (rotateOn ? rotCam : ring[0]));
-  const showAlso = tablet && !split && (motions.length >= 3 || (pin && motions.length >= 1));
+  const pinned = grid ? null : pin;
+  const split = tablet && !pinned && motions.length === 2;
+  const main = pinned ? pinned.cam : (newest || (rotateOn ? rotCam : ring[0]));
+  const showAlso = tablet && !split && (motions.length >= 3 || (pinned && motions.length >= 1));
   const also = showAlso ? motions.filter((id) => id !== main).reverse() : [];
-  const rotating = !grid && !split && !pin && !newest && rotateOn && ring.length > 1;
+  const rotating = !grid && !split && !pinned && !newest && rotateOn && ring.length > 1;
   return { cams, byId, motions, newest, main, nextCam, split, also, rotating, tablet, grid };
 }
 
@@ -265,9 +272,8 @@ function renderChrome(d) {
       (d.rotating ? `<div class="progress"><span style="width:${pct}%"></span></div>` : '');
   }
   const tl = [];
-  if (pin) {
-    const left = Math.max(0, Math.round((pin.until - now()) / 1000));
-    tl.push(`<button type="button" class="pill" data-act="unpin">Angeheftet · nur hier · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} · lösen</button>`);
+  if (pin && !d.grid) {
+    tl.push(`<button type="button" class="pill" data-act="unpin">${esc(d.byId[pin.cam].label)} angeheftet · lösen</button>`);
   }
   if (d.also.length) {
     tl.push(`<div class="also" role="status"><span class="dot"></span>auch:${d.also.map((id) =>
@@ -340,17 +346,17 @@ root.addEventListener('click', (e) => {
   if (onDetails()) return;
   const el = e.target.closest('[data-act],[data-pin],[data-off],[data-tile],[data-open],[data-layout]');
   if (!el || !S) return;
-  const pinMs = S.pin_minutes * 60000;
   if (el.dataset.layout) {
     layout = el.dataset.layout;
     local.set('layout', layout);
-    pin = null; rotateOn = true; rotStart = now(); menuOpen = false;
+    setPin(null); rotateOn = true; menuOpen = false;
     render();
     return;
   }
   if (el.dataset.open) { location.hash = '#cam/' + encodeURIComponent(el.dataset.open); return; }
-  if (el.dataset.tile) pin = { cam: el.dataset.tile, until: now() + pinMs };
-  else if (el.dataset.pin) { pin = { cam: el.dataset.pin, until: now() + pinMs }; menuOpen = false; }
+  // erneuter Klick auf die angeheftete Kachel löst sie wieder
+  if (el.dataset.tile) setPin(pin && pin.cam === el.dataset.tile ? null : el.dataset.tile);
+  else if (el.dataset.pin) { setPin(el.dataset.pin); menuOpen = false; }
   else if (el.dataset.off) {
     const c = S.cams.find((x) => x.id === el.dataset.off);
     if (c) post(`api/cams/${encodeURIComponent(c.id)}/off`, { off: !c.off });
@@ -358,7 +364,7 @@ root.addEventListener('click', (e) => {
     const act = el.dataset.act;
     if (act === 'menu') menuOpen = true;
     else if (act === 'close') menuOpen = false;
-    else if (act === 'unpin') { pin = null; rotStart = now(); }
+    else if (act === 'unpin') setPin(null);
     else if (act === 'allon') post('api/all/off', { off: false });
     else if (act === 'alloff') post('api/all/off', { off: true });
     else if (act === 'fullscreen') { document.documentElement.requestFullscreen?.(); menuOpen = false; }

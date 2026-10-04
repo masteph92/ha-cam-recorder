@@ -57,8 +57,10 @@ ohne Wahl entscheidet die Breite (ab 1400 px „Groß + klein“).
   nach vorn; genau zwei gleichzeitig stehen nebeneinander, ab drei steht die
   neueste groß und oben „auch: …“. Nutzt den Substream (`rtsp_sub`).
 - **Groß + klein** (Monitor, `?view=monitor`): eine groß, alle
-  anderen in einer Leiste. Antippen heftet eine Kamera für `ui.pin_minutes`
-  nur auf diesem Bildschirm an.
+  anderen in einer Leiste (unten oder rechts, je nach Platz). Antippen heftet
+  eine Kamera auf diesem Bildschirm an, bis man sie löst – erneut antippen,
+  „lösen“ oben links oder × im Menü. `ui.pin_minutes` wird nicht mehr
+  verwendet.
 - **Alle gleich** (`?view=grid`): Raster ohne
   Rotation, bis vier Kameras in voller Qualität. Antippen öffnet die Kamera.
 - **Übersicht** (⋯ → Übersicht): alle Kameras gleich groß, darunter Zustand,
